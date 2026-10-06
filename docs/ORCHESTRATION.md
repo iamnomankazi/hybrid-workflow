@@ -114,7 +114,8 @@ hybrid decide <job> integrated --epoch N --note "<commit sha>"
 
 Apply patches sequentially. On conflict, either resolve it yourself or resubmit the job against
 the new integration head (`base_commit` in the spec). The human merges `hybrid/<run_id>` to
-main at the end. Then `hybrid run close --epoch N` and `hybrid gc`.
+main at the end. Then `hybrid run close --epoch N` and `hybrid gc --run <run_id>` (after close
+there is no active run, so the run must be named).
 
 ## Re-grounding a fresh session
 

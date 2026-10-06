@@ -119,7 +119,7 @@ const misc = {
   async run(fx) {
     fx.submit({ job_id: 'orph' }, scenario('spawn-child', 'FAKE_SLEEP_MS: 1500'));
     // jb1's worktree path is a string prefix of jb10's: finalizing jb1 must not sweep jb10's Codex.
-    fx.submit({ job_id: 'jb1' }, scenario('slow', 'FAKE_SLEEP_MS: 10000'));
+    fx.submit({ job_id: 'jb1' }, scenario('slow', 'FAKE_SLEEP_MS: 40000'));
     fx.submit({ job_id: 'jb10' }, scenario('hang'));
     fx.startRunner();
   },

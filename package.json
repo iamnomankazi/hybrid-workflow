@@ -15,7 +15,7 @@
     "win32"
   ],
   "scripts": {
-    "test": "node --test --test-reporter=spec \"test/**/*.test.mjs\"",
+    "test": "npm run test:unit && npm run test:integration",
     "test:unit": "node --test --test-reporter=spec \"test/unit/*.test.mjs\"",
     "test:integration": "node --test --test-concurrency=1 --test-reporter=spec \"test/integration/*.test.mjs\""
   }

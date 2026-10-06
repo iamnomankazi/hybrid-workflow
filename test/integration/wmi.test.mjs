@@ -43,7 +43,7 @@ test('WMI launch: quoting, WmiPrvSE parent, identity, kill', async () => {
   const script = [
     'const fs = require("fs");',
     'fs.writeFileSync(process.argv[1], JSON.stringify({ pid: process.pid, ppid: process.ppid, argv: process.argv.slice(1) }));',
-    'setTimeout(() => {}, 5000);',
+    'setTimeout(() => {}, 60000);',
   ].join('\n');
   const args = ['-e', script, outFile, marker];
 
