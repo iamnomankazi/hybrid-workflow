@@ -5,7 +5,9 @@ default; `--json` prints one JSON document for machine use. Errors go to stderr.
 
 Run selection: `--run <id>` or, by default, the machine's active run (`active-run.json`).
 Session identity: `--session <id>`, else `HYBRID_SESSION_ID`, else `CLAUDE_CODE_SESSION_ID`.
-Mutating commands require `--epoch <n>` equal to the run's current owner epoch.
+Mutating commands require `--epoch <n>` equal to the run's current owner epoch. The fence is
+epoch-only: the session id is recorded but not checked, so any session presenting the current
+epoch is accepted (it guards against stale controllers, not impersonation; ARCHITECTURE §6).
 
 | Command | Mutates | Purpose |
 | --- | --- | --- |
@@ -34,7 +36,7 @@ Mutating commands require `--epoch <n>` equal to the run's current owner epoch.
 | 0 | ok (for `wait`: woke, `idle` or `runner_down`; see the `reason` field) |
 | 1 | error |
 | 2 | usage / validation error |
-| 3 | fenced: stale epoch or wrong owner |
+| 3 | fenced: `--epoch` is not the current owner epoch (the fence checks the epoch only, not the session) |
 | 4 | not found |
 | 5 | conflict (active run exists, job in wrong state, run closed) |
 | 10 | `wait` timed out with nothing to report |
