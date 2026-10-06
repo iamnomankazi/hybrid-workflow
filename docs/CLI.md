@@ -1,0 +1,64 @@
+# `hybrid` CLI reference
+
+`node bin/hybrid.mjs <command> …` (or `hybrid …` once linked). Output is concise text by
+default; `--json` prints one JSON document for machine use. Errors go to stderr.
+
+Run selection: `--run <id>` or, by default, the machine's active run (`active-run.json`).
+Session identity: `--session <id>`, else `HYBRID_SESSION_ID`, else `CLAUDE_CODE_SESSION_ID`.
+Mutating commands require `--epoch <n>` equal to the run's current owner epoch.
+
+| Command | Mutates | Purpose |
+| --- | --- | --- |
+| `repo add <alias> <path> [--node-modules junction\|none]` | config | Register a repository alias |
+| `repo list` | — | Show aliases |
+| `doctor` | — | Check node, git, codex, PowerShell/CIM, state and worktree roots |
+| `run start --repo <alias> [--base <ref>] [--goal <text>] [--concurrency <n≤4>]` | creates run | Take the global lock, pin config + base commit, owner epoch 1, launch the runner |
+| `run list` | — | All runs, newest first |
+| `run close --epoch N` | yes | Refuses while jobs are queued/active; closes the run, stops the runner, releases the global lock |
+| `run unhold --epoch N` | yes | Clear a quota/auth launch hold |
+| `run ensure-runner --epoch N` | yes | Relaunch the runner if it is not alive (after `wait` reports `runner_down`) |
+| `takeover [--session S]` | owner | Increment the epoch and become owner |
+| `submit <spec.json> --epoch N [--no-wait]` | yes | Validate, store spec + capsule, queue the job |
+| `status [<job>] [--changed [--since N]]` | cursor only | Run/job summary; `--changed` = transitions since the session cursor |
+| `wait [--any] [--since N] [--timeout 50m] [--debounce 60s]` | — | Block until a wake transition, `runner_down`, `idle` or timeout |
+| `result <job> [--json]` | — | Outcome, worker report (≤16 KB), patch verdict and provenance |
+| `cancel <job> --epoch N` | yes | Cancel a queued or active job (tree kill + orphan sweep + patch capture) |
+| `resume <job> --epoch N [--note <text> \| --note-file <f>]` | yes | Queue a new attempt of the same Codex session with pinned flags |
+| `decide <job> <integrated\|rejected\|superseded\|deferred> --epoch N [--note]` | yes | Record Opus's integration decision |
+| `gc [--dry-run] [--all-terminal] [--epoch N]` | worktrees | Remove worktrees of decided/completed terminal jobs |
+
+## Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| 0 | ok (for `wait`: woke, `idle` or `runner_down`; see the `reason` field) |
+| 1 | error |
+| 2 | usage / validation error |
+| 3 | fenced: stale epoch or wrong owner |
+| 4 | not found |
+| 5 | conflict (active run exists, job in wrong state, run closed) |
+| 10 | `wait` timed out with nothing to report |
+
+## Job spec (`hybrid.job-spec/1`)
+
+```json
+{
+  "job_id": "auth-refactor",
+  "title": "Refactor token refresh",
+  "preset": "luna-xhigh-impl",
+  "capsule_file": "capsules/auth-refactor.md",
+  "write_scope": ["src/auth/", "test/auth/"],
+  "allow_protected": [],
+  "allow_symlinks": false,
+  "timeout_minutes": 120,
+  "stall_minutes": 15,
+  "base_commit": null
+}
+```
+
+`capsule_file` is relative to the spec file (or use inline `capsule`). Model, effort and
+sandbox come only from the preset. Unknown fields are rejected. `job_id` is optional
+(`j001`, `j002`, … are generated).
+
+Built-in presets: `sol-high-review`, `sol-high-impl`, `luna-xhigh-impl`,
+`luna-xhigh-review`, `sol-low-smoke`.

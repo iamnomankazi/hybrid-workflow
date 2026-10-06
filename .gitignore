@@ -1,0 +1,26 @@
+# Dependencies (none today; keep it that way unless justified)
+node_modules/
+
+# Runtime state never lives in the repo, but guard against accidental local runs
+/.hybrid/
+/state/
+/runs/
+*.tmp
+*.log
+
+# Local machine config / secrets
+.env
+.env.*
+config.local.json
+auth.json
+
+# OS / editor noise
+Thumbs.db
+desktop.ini
+.DS_Store
+.vscode/
+.idea/
+
+# Scratch
+/scratch/
+/tmp/

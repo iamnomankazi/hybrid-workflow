@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Hybrid Workflow worker final report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["job_id", "status", "summary", "files_changed", "tests", "notes"],
+  "properties": {
+    "job_id": { "type": "string", "description": "Echo the job_id given in the task header." },
+    "status": { "type": "string", "enum": ["done", "partial", "blocked"] },
+    "summary": { "type": "string", "description": "What was done, in a few sentences." },
+    "files_changed": { "type": "array", "items": { "type": "string" } },
+    "tests": { "type": "string", "description": "Tests run and their result, or why none were run." },
+    "notes": { "type": "string", "description": "Blockers, risks, follow-ups; empty string if none." }
+  }
+}
