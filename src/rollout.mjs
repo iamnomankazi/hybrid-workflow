@@ -4,7 +4,8 @@ import os from 'node:os';
 import path from 'node:path';
 
 const THREAD_ID_RE = /^[0-9a-f-]{36}$/i;
-const MAX_READ_BYTES = 4 * 1024 * 1024;
+const MAX_FULL_READ_BYTES = 64 * 1024 * 1024;
+const HEAD_READ_BYTES = 8 * 1024 * 1024;
 const MAX_WALK_ENTRIES = 20000;
 
 export function defaultCodexHome(env = process.env) {
@@ -61,38 +62,61 @@ export function findRolloutFile(codexHome, threadId, { around = new Date() } = {
   return null;
 }
 
-function readHead(file) {
+// Whole rollout up to MAX_FULL_READ_BYTES; beyond that the head (session start, where the
+// instruction messages live) plus the tail (where the latest attempt's records live). A line cut
+// at the seam is unparsable and skipped.
+function readRollout(file) {
+  const size = fs.statSync(file).size;
   const fd = fs.openSync(file, 'r');
   try {
-    const buf = Buffer.alloc(MAX_READ_BYTES);
-    const n = fs.readSync(fd, buf, 0, MAX_READ_BYTES, 0);
-    return buf.subarray(0, n).toString('utf8');
+    const read = (len, pos) => {
+      const buf = Buffer.alloc(len);
+      const n = fs.readSync(fd, buf, 0, len, pos);
+      return buf.subarray(0, n).toString('utf8');
+    };
+    if (size <= MAX_FULL_READ_BYTES) return read(size, 0);
+    const tail = MAX_FULL_READ_BYTES - HEAD_READ_BYTES;
+    return `${read(HEAD_READ_BYTES, 0)}\n${read(tail, size - tail)}`;
   } finally {
     fs.closeSync(fd);
   }
 }
 
+function* records(text) {
+  for (const line of text.split('\n')) {
+    if (!line.trim()) continue;
+    try {
+      yield JSON.parse(line);
+    } catch { /* cut line */ }
+  }
+}
+
 // Returns only configuration fields; instruction text in the rollout is never surfaced.
-export function readObservedConfig(file) {
-  let head;
+// `codex exec resume` appends each attempt's turn_context to the SAME rollout, so the record
+// describing an attempt is the last turn_context written at or after that attempt's launch
+// (`since`). Without `since`, the last turn_context in the file.
+export function readObservedConfig(file, { since = null } = {}) {
+  let text;
   try {
-    head = readHead(file);
+    text = readRollout(file);
   } catch {
     return null;
   }
+  const parsed = since ? Date.parse(since) : NaN;
+  const sinceMs = Number.isNaN(parsed) ? null : parsed;
   let meta = null;
   let ctx = null;
-  for (const line of head.split('\n')) {
-    if (!line.trim()) continue;
-    let rec;
-    try {
-      rec = JSON.parse(line);
-    } catch {
-      continue; // includes a line cut off by the read limit
-    }
+  let ctxAt = null;
+  let inWindow = 0;
+  for (const rec of records(text)) {
     if (!meta && rec?.type === 'session_meta') meta = rec.payload ?? {};
-    else if (!ctx && rec?.type === 'turn_context') ctx = rec.payload ?? {};
-    if (meta && ctx) break;
+    else if (rec?.type === 'turn_context') {
+      const at = Date.parse(rec.timestamp ?? '');
+      if (sinceMs !== null && !(at >= sinceMs)) continue;
+      ctx = rec.payload ?? {};
+      ctxAt = rec.timestamp ?? null;
+      inWindow++;
+    }
   }
   if (!meta) return null;
   const sandbox = ctx?.sandbox_policy;
@@ -104,24 +128,28 @@ export function readObservedConfig(file) {
     effort: ctx?.effort ?? null,
     approval_policy: ctx?.approval_policy ?? null,
     sandbox_policy: (typeof sandbox === 'string' ? sandbox : sandbox?.type) ?? null,
+    turn_context_at: ctxAt,
+    turn_contexts_in_window: inWindow,
     source: 'rollout',
   };
 }
 
 // What reached the model besides the task: Codex's skills catalog block, and (when probes for
-// the pinned global instructions file are available) that file's text. Presence only.
+// the pinned global instructions file are available) that file's text. Presence only. The
+// whole session counts: instruction messages are recorded once at session start but remain in
+// the model's context for every resumed attempt.
 export function readObservedIsolation(file, { globalProbes = null } = {}) {
-  let head;
+  let text;
   try {
-    head = readHead(file);
+    text = readRollout(file);
   } catch {
     return null;
   }
   return {
-    skills_catalog_present: head.includes('<skills_instructions>'),
+    skills_catalog_present: text.includes('<skills_instructions>'),
     global_instructions_present: globalProbes === null
       ? null
-      : globalProbes.length > 0 && globalProbes.some((probe) => head.includes(JSON.stringify(probe).slice(1, -1))),
+      : globalProbes.length > 0 && globalProbes.some((probe) => text.includes(JSON.stringify(probe).slice(1, -1))),
   };
 }
 

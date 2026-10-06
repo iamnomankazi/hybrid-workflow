@@ -154,11 +154,12 @@ export function capturePatchBlock({ ctx, worktree, baseCommit, ap, attempt, spec
 // ---------- observed configuration ----------
 
 // globalInstructions is the launch-time record (launch.json); its text is only used, in memory,
-// to detect whether it reached the model.
-export function observedBlock({ codexHome, threadId, requested, globalInstructions = null }) {
+// to detect whether it reached the model. `since` is this attempt's launch time: a resumed
+// attempt appends to the original rollout, and only its own turn_context describes it.
+export function observedBlock({ codexHome, threadId, requested, globalInstructions = null, since = null }) {
   if (!threadId) return { observed: null, matches: null, mismatches: [], isolation: null };
   const file = findRolloutFile(codexHome ?? defaultCodexHome(process.env), threadId);
-  const observed = file ? readObservedConfig(file) : null;
+  const observed = file ? readObservedConfig(file, { since }) : null;
   const { matches, mismatches } = compareObserved(requested, observed);
   let globalProbes = null;
   if (globalInstructions) {
@@ -173,6 +174,7 @@ export function observedBlock({ codexHome, threadId, requested, globalInstructio
       effort: observed.effort,
       sandbox_policy: observed.sandbox_policy,
       approval_policy: observed.approval_policy,
+      turn_context_at: observed.turn_context_at,
       source: observed.source,
     },
     matches,
@@ -222,7 +224,8 @@ export function collectEvidence({ run, spec, state, ap, ctx, worktree }) {
   try {
     observed = {
       ...observedBlock({
-        codexHome: run.config.codex_home, threadId, requested, globalInstructions: launch?.global_instructions ?? null,
+        codexHome: run.config.codex_home, threadId, requested,
+        globalInstructions: launch?.global_instructions ?? null, since: launch?.created_at ?? null,
       }),
       error: null,
     };

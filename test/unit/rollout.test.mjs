@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { compareObserved, defaultCodexHome, findRolloutFile, readObservedConfig } from '../../src/rollout.mjs';
+import { compareObserved, defaultCodexHome, findRolloutFile, readObservedConfig, readObservedIsolation } from '../../src/rollout.mjs';
 
 const THREAD = '01a10f19-685d-7993-aaf0-7b528e9b4469';
 const ctx = { model: 'gpt-6.1-sol', effort: 'high', approval_policy: 'never', sandbox_policy: { type: 'read-only' }, cwd: 'C:\\x' };
@@ -52,15 +52,15 @@ test('findRolloutFile falls back to a bounded walk and rejects bad ids', () => {
   }
 });
 
-test('readObservedConfig takes session_meta and the first turn_context', () => {
+test('readObservedConfig takes session_meta and the last turn_context', () => {
   const home = tmp();
   try {
     const file = writeRollout(home, new Date(), [
       { type: 'session_meta', payload: { id: THREAD, cli_version: '0.99.0', cwd: 'C:\\wt', instructions: 'SECRET TEXT' } },
       { type: 'response_item', payload: { text: 'hello' } },
       'garbage line',
-      { type: 'turn_context', payload: ctx },
-      { type: 'turn_context', payload: { ...ctx, model: 'later' } },
+      { type: 'turn_context', payload: { ...ctx, model: 'earlier' } },
+      { type: 'turn_context', timestamp: '2026-10-07T00:00:00.000Z', payload: ctx },
     ]);
     const obs = readObservedConfig(file);
     assert.deepEqual(obs, {
@@ -71,9 +71,62 @@ test('readObservedConfig takes session_meta and the first turn_context', () => {
       effort: 'high',
       approval_policy: 'never',
       sandbox_policy: 'read-only',
+      turn_context_at: '2026-10-07T00:00:00.000Z',
+      turn_contexts_in_window: 2,
       source: 'rollout',
     });
     assert.ok(!JSON.stringify(obs).includes('SECRET'));
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// `codex exec resume` appends the new attempt's turn_context to the original rollout. Attempt 1
+// here ran correctly; attempt 2 (resumed) ran without the pinned sandbox/approval. The resumed
+// attempt must be judged by its own record, so the mismatch is reported.
+test('a resumed attempt is described by its own turn_context, not the first one', () => {
+  const home = tmp();
+  try {
+    const good = { ...ctx, sandbox_policy: { type: 'workspace-write' } };
+    const bad = { ...ctx, sandbox_policy: { type: 'danger-full-access' }, approval_policy: 'on-request' };
+    const file = writeRollout(home, new Date(), [
+      { timestamp: '2026-10-06T22:28:41.973Z', type: 'session_meta', payload: { id: THREAD } },
+      { timestamp: '2026-10-06T22:28:43.764Z', type: 'turn_context', payload: good },
+      { timestamp: '2026-10-06T22:35:45.153Z', type: 'turn_context', payload: bad },
+    ]);
+    const requested = { model: 'gpt-6.1-sol', effort: 'high', sandbox: 'workspace-write', approval_policy: 'never' };
+
+    const attempt1 = readObservedConfig(file, { since: '2026-10-06T22:28:40.000Z' });
+    const attempt2 = readObservedConfig(file, { since: '2026-10-06T22:35:43.000Z' });
+    assert.equal(attempt2.sandbox_policy, 'danger-full-access');
+    assert.equal(attempt2.turn_contexts_in_window, 1);
+    assert.deepEqual(compareObserved(requested, attempt2).mismatches.map((m) => m.field), ['sandbox', 'approval_policy']);
+    assert.equal(attempt1.sandbox_policy, 'danger-full-access', 'last record wins without a tighter window');
+
+    const none = readObservedConfig(file, { since: '2026-10-06T23:00:00.000Z' });
+    assert.equal(none.sandbox_policy, null, 'no turn_context after the launch: unverifiable, reported as a mismatch');
+    assert.equal(none.turn_contexts_in_window, 0);
+    assert.equal(compareObserved(requested, none).matches, false);
+
+    assert.equal(readObservedConfig(file, { since: 'not a date' }).sandbox_policy, 'danger-full-access', 'invalid since = no window');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('records beyond the first 4 MB of a rollout are read (long or resumed sessions)', () => {
+  const home = tmp();
+  try {
+    const padding = { type: 'response_item', payload: { text: 'x'.repeat(5 * 1024 * 1024) } };
+    const file = writeRollout(home, new Date(), [
+      { timestamp: '2026-10-06T22:00:00.000Z', type: 'session_meta', payload: { id: THREAD } },
+      { timestamp: '2026-10-06T22:00:01.000Z', type: 'turn_context', payload: ctx },
+      padding,
+      { timestamp: '2026-10-06T22:30:00.000Z', type: 'turn_context', payload: { ...ctx, model: 'resumed' } },
+      { timestamp: '2026-10-06T22:30:00.100Z', type: 'response_item', payload: { text: '<skills_instructions>late</skills_instructions>' } },
+    ]);
+    assert.equal(readObservedConfig(file, { since: '2026-10-06T22:29:00.000Z' }).model, 'resumed');
+    assert.equal(readObservedIsolation(file).skills_catalog_present, true);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

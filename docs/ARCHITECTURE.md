@@ -184,7 +184,10 @@ Resume attempt (`exec resume` has no `-s`/`-C`): the same flags with
 * stdout → `events.jsonl`, stderr → `stderr.log`: files, never pipes to the runner.
 * Observed model, effort, approval policy and sandbox are read from the session rollout
   (`$CODEX_HOME/sessions/**/rollout-*-<thread_id>.jsonl`, `turn_context`) and compared to the
-  request; a mismatch is recorded in `result.json` provenance.
+  request; a mismatch is recorded in `result.json` provenance. `codex exec resume` appends to
+  the original rollout, so an attempt is judged by the **last `turn_context` written at or
+  after its own launch** (`launch.json.created_at`); no such record means unverifiable, which
+  counts as a mismatch. The whole rollout is read (head and tail beyond 64 MB).
 
 ### What reaches the model besides the task
 
