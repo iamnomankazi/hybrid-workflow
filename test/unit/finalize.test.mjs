@@ -159,6 +159,7 @@ test('observedBlock compares the rollout to the request and tolerates a missing 
     assert.equal(ok.matches, true);
     assert.equal(ok.observed.model, 'm1');
     assert.equal(ok.observed.sandbox_policy, 'workspace-write');
+    assert.deepEqual(ok.isolation, { skills_catalog_present: false, global_instructions_present: null });
 
     const bad = observedBlock({ codexHome: home, threadId: thread, requested: { ...requested, effort: 'low' } });
     assert.equal(bad.matches, false);
@@ -166,7 +167,7 @@ test('observedBlock compares the rollout to the request and tolerates a missing 
 
     const missing = observedBlock({ codexHome: home, threadId: '11111111-2222-3333-4444-555555555555', requested });
     assert.deepEqual([missing.observed, missing.matches], [null, null]);
-    assert.deepEqual(observedBlock({ codexHome: home, threadId: null, requested }), { observed: null, matches: null, mismatches: [] });
+    assert.deepEqual(observedBlock({ codexHome: home, threadId: null, requested }), { observed: null, matches: null, mismatches: [], isolation: null });
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

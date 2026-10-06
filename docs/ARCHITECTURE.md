@@ -171,6 +171,7 @@ codex exec --ignore-user-config --strict-config --ignore-rules --skip-git-repo-c
   -m <model> -c model_reasoning_effort="<effort>" -s <read-only|workspace-write>
   -c approval_policy="never" -c shell_environment_policy.inherit="core"
   -c windows.sandbox="elevated" [-c project_doc_max_bytes=0]
+  -c skills.include_instructions=false
   -C <worktree> --json -o <attempt>\last-message.md [--output-schema <schema>] -
 ```
 Resume attempt (`exec resume` has no `-s`/`-C`): the same flags with
@@ -184,6 +185,32 @@ Resume attempt (`exec resume` has no `-s`/`-C`): the same flags with
 * Observed model, effort, approval policy and sandbox are read from the session rollout
   (`$CODEX_HOME/sessions/**/rollout-*-<thread_id>.jsonl`, `turn_context`) and compared to the
   request; a mismatch is recorded in `result.json` provenance.
+
+### What reaches the model besides the task
+
+`--ignore-user-config` skips `config.toml`, but Codex 0.160.1 still injects two kinds of
+user-level content from `CODEX_HOME` (verified from session rollouts, 2026-10-06):
+
+| Content | Control | Hybrid behaviour |
+| --- | --- | --- |
+| Project `AGENTS.md` in the worktree | `project_doc_max_bytes=0` | Suppressed. Capsules carry all task context |
+| User skills catalog (`<skills_instructions>`) | `skills.include_instructions=false` | Suppressed |
+| Global `<CODEX_HOME>/AGENTS.override.md`, else `<CODEX_HOME>/AGENTS.md` | **None exists.** `instructions` is additive; no flag or feature disables it | **Known limitation.** Pinned and recorded (below) |
+
+The only way to exclude the global file would be a separate `CODEX_HOME`, which duplicates
+the rotating ChatGPT refresh token (logout races), so Hybrid does not do it. Instead
+(`src/instructions.mjs`):
+
+* `run start` records the fingerprint (presence, size, sha256 of both candidate files, never
+  their text) in `run.json.global_instructions`; `doctor` and `run start` warn when present.
+* Before every launch the runner re-reads it; a change since run start refuses the launch
+  with `failed/global_instructions_changed`, before any worktree is created.
+* `launch.json` and `result.json.provenance.global_instructions` record what was in force.
+* `result.json.provenance.observed_isolation` reports, from the rollout, whether a skills
+  catalog and whether the pinned global text actually reached the model
+  (`global_instructions_present` is `null` when it cannot be attributed).
+
+Keep the global file empty if workers must receive no user-level instructions at all.
 
 ### Worker environment
 

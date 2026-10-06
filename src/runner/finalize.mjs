@@ -6,7 +6,8 @@ import { HYBRID_VERSION, SCHEMAS } from '../constants.mjs';
 import { classifyFailure, summarizeEvents, summarizeEventsFile } from '../events.mjs';
 import { fileSize, readJson, readText, sha256File, truncateUtf8, writeJsonAtomic } from '../fsutil.mjs';
 import { capturePatch } from '../git.mjs';
-import { compareObserved, defaultCodexHome, findRolloutFile, readObservedConfig } from '../rollout.mjs';
+import { compareObserved, defaultCodexHome, findRolloutFile, readObservedConfig, readObservedIsolation } from '../rollout.mjs';
+import { globalInstructionProbes } from '../instructions.mjs';
 import { findReparsePoints, validateChanges } from '../scope.mjs';
 
 export const MAX_REPORT_BYTES = 16384;
@@ -152,11 +153,20 @@ export function capturePatchBlock({ ctx, worktree, baseCommit, ap, attempt, spec
 
 // ---------- observed configuration ----------
 
-export function observedBlock({ codexHome, threadId, requested }) {
-  if (!threadId) return { observed: null, matches: null, mismatches: [] };
+// globalInstructions is the launch-time record (launch.json); its text is only used, in memory,
+// to detect whether it reached the model.
+export function observedBlock({ codexHome, threadId, requested, globalInstructions = null }) {
+  if (!threadId) return { observed: null, matches: null, mismatches: [], isolation: null };
   const file = findRolloutFile(codexHome ?? defaultCodexHome(process.env), threadId);
   const observed = file ? readObservedConfig(file) : null;
   const { matches, mismatches } = compareObserved(requested, observed);
+  let globalProbes = null;
+  if (globalInstructions) {
+    globalProbes = globalInstructions.present
+      ? globalInstructionProbes(globalInstructions.codex_home, globalInstructions.fingerprint)
+      : [];
+  }
+  const isolation = file ? readObservedIsolation(file, { globalProbes }) : null;
   return {
     observed: observed && {
       model: observed.model,
@@ -167,6 +177,7 @@ export function observedBlock({ codexHome, threadId, requested }) {
     },
     matches,
     mismatches,
+    isolation,
   };
 }
 
@@ -206,9 +217,15 @@ export function collectEvidence({ run, spec, state, ap, ctx, worktree }) {
   const requested = { ...spec.preset_config, approval_policy: 'never' };
   const threadId = state.codex_session_id ?? events.thread_id;
 
-  let observed = { observed: null, matches: null, mismatches: [], error: null };
+  const launch = guard('launch.json', () => readJson(ap.launch, { optional: true }), null);
+  let observed = { observed: null, matches: null, mismatches: [], isolation: null, error: null };
   try {
-    observed = { ...observedBlock({ codexHome: run.config.codex_home, threadId, requested }), error: null };
+    observed = {
+      ...observedBlock({
+        codexHome: run.config.codex_home, threadId, requested, globalInstructions: launch?.global_instructions ?? null,
+      }),
+      error: null,
+    };
   } catch (err) {
     observed.error = err.message;
   }
@@ -270,6 +287,8 @@ export function buildResult({
       observed_matches: observed?.matches ?? null,
       observed_mismatches: observed?.mismatches ?? [],
       observed_error: observed?.error ?? null,
+      observed_isolation: observed?.isolation ?? null,
+      global_instructions: launch?.global_instructions ?? null,
       codex_session_id: state.codex_session_id,
       codex_version: run.versions?.codex ?? null,
       runner_version: HYBRID_VERSION,

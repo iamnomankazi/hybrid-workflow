@@ -1,7 +1,7 @@
 // Stand-in for `codex exec`, driven by directives inside the prompt text (one per line):
-//   FAKE_SCENARIO: <name>   FAKE_SLEEP_MS: <n>   FAKE_WRITE: <relpath> => <content>
+//   FAKE_SCENARIO: <name>   FAKE_SLEEP_MS: <n>   FAKE_RESUME_MS: <n>   FAKE_WRITE: <relpath> => <content>
 // Scenarios: success (default) fail quota auth hang slow no-final exit0-no-turn spawn-child dump-env,
-// pause (thread.started, silence for FAKE_SLEEP_MS, then 2.5 s of events, then success).
+// pause (thread.started, silence for FAKE_SLEEP_MS, then FAKE_RESUME_MS (default 2.5 s) of events, then success).
 // Never writes outside its cwd.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -30,6 +30,7 @@ const lines = prompt.split(/\r?\n/);
 const directive = (name) => lines.map((l) => new RegExp(`^${name}:\s*(.*)$`).exec(l)).find(Boolean)?.[1].trim();
 const scenario = directive('FAKE_SCENARIO') ?? 'success';
 const sleepMs = Number(directive('FAKE_SLEEP_MS') ?? 600000);
+const resumeMs = Number(directive('FAKE_RESUME_MS') ?? 2500);
 const writes = lines.map((l) => /^FAKE_WRITE:\s*(\S+)\s*=>\s*(.*)$/.exec(l)).filter(Boolean).map((m) => [m[1], m[2]]);
 const jobId = /^- job_id: (\S+)/m.exec(prompt)?.[1] ?? 'unknown';
 
@@ -81,7 +82,7 @@ switch (scenario) {
     break;
   case 'slow':
   case 'pause': {
-    const end = Date.now() + (scenario === 'pause' ? 2500 : sleepMs);
+    const end = Date.now() + (scenario === 'pause' ? resumeMs : sleepMs);
     for (let i = 0; Date.now() < end; i++) {
       message(`slow_${i}`, `working ${i}`);
       await wait(200);

@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { loadMachineConfig } from '../../config.mjs';
+import { defaultCodexHome } from '../../rollout.mjs';
+import { describeGlobalInstructions, readGlobalInstructions } from '../../instructions.mjs';
 import { resolveCodexExe, codexVersion } from '../../codex.mjs';
 import { resolveGitExe, gitVersion } from '../../git.mjs';
 import { homePaths, defaultWorktreeRoot } from '../../paths.mjs';
@@ -61,6 +63,15 @@ async function cimCheck() {
   return { ok: true, detail: `pid ${id.pid} start ${id.start_time}` };
 }
 
+// Not a failure: Codex offers no switch to exclude CODEX_HOME's AGENTS.md, so Hybrid pins and
+// records it instead (src/instructions.mjs). The operator should know it reaches every worker.
+function globalInstructionsCheck(machine) {
+  const gi = readGlobalInstructions(machine.codex_home ?? defaultCodexHome());
+  return gi.present
+    ? { ok: true, warn: true, detail: `${describeGlobalInstructions(gi)}: injected into every worker; pinned per run` }
+    : { ok: true, detail: `none in ${gi.codex_home}` };
+}
+
 async function activeRunCheck(home) {
   const lock = readActiveRunLock(home);
   if (!lock?.run_id) return { ok: true, detail: 'none' };
@@ -91,12 +102,13 @@ export const doctor = {
     await check('git', () => gitCheck(c.home));
     await check('codex', () => codexCheck(machine ?? loadMachineConfig(c.home)));
     await check('worktree_root', () => worktreeRootCheck(machine ?? loadMachineConfig(c.home)));
+    await check('global_instructions', () => globalInstructionsCheck(machine ?? loadMachineConfig(c.home)));
     await check('powershell_cim', cimCheck);
     await check('active_run', () => activeRunCheck(c.home));
     const ok = checks.every((x) => x.ok);
     return {
       data: { ok, checks },
-      text: checks.map((x) => `${x.ok ? 'ok  ' : 'FAIL'} ${x.name}: ${x.detail}`).join('\n'),
+      text: checks.map((x) => `${!x.ok ? 'FAIL' : x.warn ? 'warn' : 'ok  '} ${x.name}: ${x.detail}`).join('\n'),
       exitCode: ok ? 0 : 1,
     };
   },

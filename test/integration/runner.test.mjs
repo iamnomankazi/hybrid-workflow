@@ -6,10 +6,13 @@
 import { test, afterEach, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { sha256, readJson } from '../../src/fsutil.mjs';
 import { areAlive, findProcessesReferencing, killTree, TASKKILL_EXE } from '../../src/proc.mjs';
 import { createFixture, waitFor } from '../helpers/runfixture.mjs';
+import { readGlobalInstructions } from '../../src/instructions.mjs';
 
 const TERMINAL = ['completed', 'failed', 'interrupted', 'cancelled', 'paused_quota', 'paused_auth', 'rejected'];
 const loose = [];
@@ -101,7 +104,7 @@ const lifecycle = {
 const crash = {
   options: {},
   async run(fx) {
-    fx.submit({ job_id: 'adopt' }, scenario('slow', 'FAKE_SLEEP_MS: 12000', 'FAKE_WRITE: src/late.txt => late'));
+    fx.submit({ job_id: 'adopt' }, scenario('slow', 'FAKE_SLEEP_MS: 30000', 'FAKE_WRITE: src/late.txt => late'));
     fx.submit({ job_id: 'lost' }, scenario('hang'));
     const first = fx.startRunner();
     const [adopt, lost] = await Promise.all([waitRunningWithCodex(fx, 'adopt'), waitRunningWithCodex(fx, 'lost')]);
@@ -370,7 +373,7 @@ test('the orphan sweep never touches a sibling job whose id extends this one', a
 
 test('stalled returns to running when events resume, keeping the original start time', async () => {
   const fx = await fixture();
-  fx.submit({ job_id: 'pz', stall_minutes: 1 }, scenario('pause', 'FAKE_SLEEP_MS: 7000'));
+  fx.submit({ job_id: 'pz', stall_minutes: 1 }, scenario('pause', 'FAKE_SLEEP_MS: 7000', 'FAKE_RESUME_MS: 10000'));
   fx.startRunner();
   const s = await terminal(fx, 'pz');
   assert.equal(s.state, 'completed', fx.diagnostics('pz'));
@@ -380,6 +383,35 @@ test('stalled returns to running when events resume, keeping the original start 
     ['stalled', 'no_events'], ['running', 'events_resumed'], ['completed', null],
   ]);
   assert.equal(fx.readResult('pz').timestamps.started_at, feed[2].ts);
+});
+
+test('global Codex instructions are recorded per launch and a mid-run change refuses the launch', async () => {
+  const codexHome = fs.mkdtempSync(path.join(os.tmpdir(), 'hwgi-'));
+  try {
+    fs.writeFileSync(path.join(codexHome, 'AGENTS.md'), 'global instructions, version one\n');
+    const pinned = readGlobalInstructions(codexHome);
+    const fx = await fixture({ runOverrides: { global_instructions: pinned } });
+    fx.submit({ job_id: 'gi-ok' }, scenario('success'));
+    fx.startRunner();
+    const ok = await terminal(fx, 'gi-ok');
+    assert.equal(ok.state, 'completed', fx.diagnostics('gi-ok'));
+    assert.equal(readJson(fx.attempt('gi-ok').launch).global_instructions.fingerprint, pinned.fingerprint);
+    const prov = fx.readResult('gi-ok').provenance;
+    assert.equal(prov.global_instructions.fingerprint, pinned.fingerprint);
+    assert.equal(prov.global_instructions.selected, 'AGENTS.md');
+    assert.ok(!JSON.stringify(prov).includes('version one'), 'instruction text is never recorded');
+
+    fs.writeFileSync(path.join(codexHome, 'AGENTS.md'), 'global instructions, version two\n');
+    fx.submit({ job_id: 'gi-changed' }, scenario('success'));
+    const refused = await terminal(fx, 'gi-changed');
+    assert.equal(refused.state, 'failed', fx.diagnostics('gi-changed'));
+    assert.equal(refused.reason, 'global_instructions_changed');
+    assert.match(refused.detail, /changed since run start/);
+    assert.ok(!fs.existsSync(fx.worktree('gi-changed')), 'no worktree is created for a refused launch');
+    assert.ok(!fs.existsSync(fx.attempt('gi-changed').host), 'no worker is started');
+  } finally {
+    fs.rmSync(codexHome, { recursive: true, force: true });
+  }
 });
 
 test('launch failures: a missing Codex executable and an unusable base commit', async () => {

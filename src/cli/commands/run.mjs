@@ -4,6 +4,8 @@ import { HYBRID_VERSION, SCHEMAS, V1_MAX_CONCURRENCY } from '../../constants.mjs
 import { homePaths, runPaths } from '../../paths.mjs';
 import { buildRunConfig, loadMachineConfig } from '../../config.mjs';
 import { codexVersion } from '../../codex.mjs';
+import { defaultCodexHome } from '../../rollout.mjs';
+import { describeGlobalInstructions, readGlobalInstructions } from '../../instructions.mjs';
 import * as git from '../../git.mjs';
 import { ensureDir, nowIso, readJson, tryCreateLock, withMutex, writeFileExclusive, writeJsonAtomic } from '../../fsutil.mjs';
 import * as store from '../../store.mjs';
@@ -110,6 +112,13 @@ export const runStart = {
       codex: codexVersion({ exe: config.codex_exe, prefixArgs: config.codex_prefix_args }),
     };
 
+    // Pinned so the runner can refuse launches if it changes mid-run (src/instructions.mjs).
+    const globalInstructions = readGlobalInstructions(config.codex_home ?? defaultCodexHome());
+    if (globalInstructions.present) {
+      c.warnings.push(`global Codex instructions ${describeGlobalInstructions(globalInstructions)} reach every worker `
+        + '(Codex has no switch to exclude them); pinned for this run');
+    }
+
     const runId = store.generateRunId();
     const createdAt = nowIso();
     const rp = runPaths(home, runId);
@@ -133,6 +142,7 @@ export const runStart = {
         versions,
         tools: { node_exe: process.execPath, git_exe: gitExe },
         config,
+        global_instructions: globalInstructions,
       });
       writeFileExclusive(rp.plan, planTemplate({ runId, baseCommit, createdAt }));
     } catch (err) {
@@ -146,11 +156,12 @@ export const runStart = {
     return {
       data: {
         run_id: runId, epoch: 1, session_id: session, base_commit: baseCommit, run_dir: rp.dir, plan: rp.plan,
-        runner_pid: runner.pid,
+        runner_pid: runner.pid, global_instructions: globalInstructions,
       },
       text: [
         `run_id: ${runId}`, 'epoch: 1', `session: ${session}`, `base_commit: ${baseCommit}`,
         `run_dir: ${rp.dir}`, `plan: ${rp.plan}`, `runner: ${runnerText}`,
+        `global_instructions: ${describeGlobalInstructions(globalInstructions)}`,
       ].join('\n'),
     };
   },

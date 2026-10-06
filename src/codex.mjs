@@ -72,12 +72,15 @@ function commonConfigArgs({ model, effort }) {
   ];
 }
 
+// --ignore-user-config does not stop Codex from injecting the user's skills catalog from
+// CODEX_HOME; skills.include_instructions=false does (verified against 0.160.1 rollouts).
 function tailConfigArgs({ windowsSandbox, projectDocs }) {
   return [
     '-c', 'approval_policy="never"',
     '-c', 'shell_environment_policy.inherit="core"',
     '-c', `windows.sandbox="${windowsSandbox}"`,
     ...(projectDocs ? [] : ['-c', 'project_doc_max_bytes=0']),
+    '-c', 'skills.include_instructions=false',
   ];
 }
 

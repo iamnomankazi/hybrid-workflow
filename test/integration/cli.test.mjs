@@ -13,6 +13,7 @@ import { readJson, sha256, sleep, writeJsonAtomic } from '../../src/fsutil.mjs';
 import { ownIdentity } from '../../src/proc.mjs';
 import * as git from '../../src/git.mjs';
 import * as store from '../../src/store.mjs';
+import { readGlobalInstructions } from '../../src/instructions.mjs';
 
 const BIN = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'bin', 'hybrid.mjs');
 
@@ -198,6 +199,11 @@ describe('run lifecycle', () => {
     assert.equal(run.config.max_concurrency, 2);
     assert.equal(run.config.worktree_root, path.resolve(wtRoot));
     assert.ok(run.config.presets['luna-xhigh-impl']);
+    // Global CODEX_HOME instructions are pinned (fingerprint only, never content).
+    assert.match(run.global_instructions.fingerprint, /^[0-9a-f]{64}$/);
+    assert.equal(run.global_instructions.fingerprint, readGlobalInstructions(run.global_instructions.codex_home).fingerprint);
+    assert.deepEqual(out.global_instructions, run.global_instructions);
+    assert.deepEqual(Object.keys(run.global_instructions).sort(), ['codex_home', 'files', 'fingerprint', 'present', 'selected']);
 
     const plan = fs.readFileSync(rp().plan, 'utf8');
     assert.ok(plan.includes(runId) && plan.includes(baseCommit));

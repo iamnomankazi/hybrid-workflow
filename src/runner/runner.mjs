@@ -20,6 +20,8 @@ import { composePrompt, composeResumePrompt } from '../spec.mjs';
 import * as git from '../git.mjs';
 import { areAlive, getIdentity, isAlive, killTree, ownIdentity, sweepOrphans } from '../proc.mjs';
 import { buildResult, collectEvidence, decideOutcome, specSha256 } from './finalize.mjs';
+import { defaultCodexHome } from '../rollout.mjs';
+import { describeGlobalInstructions, readGlobalInstructions } from '../instructions.mjs';
 
 const LAUNCH_WAIT_MS = 20_000;
 const RECONCILE_LAUNCH_WAIT_MS = 10_000;
@@ -846,7 +848,7 @@ export class Runner {
     } catch (err) {
       this.log(`launch ${job.id} failed: ${err.stack ?? err.message}`);
       await this.finalizeJob(job, {
-        state: 'failed', reason: 'launch_failed', detail: err.message, exit_source: 'none',
+        state: 'failed', reason: err.reason ?? 'launch_failed', detail: err.message, exit_source: 'none',
       });
     }
   }
@@ -860,6 +862,19 @@ export class Runner {
 
     ensureDir(ap.dir);
     if (exists(ap.launch)) throw new Error(`attempt directory already holds launch.json: ${ap.dir}`);
+
+    // Codex injects CODEX_HOME's global AGENTS.md into every worker and cannot be told not to;
+    // run start pinned it, so a mid-run change refuses the launch (before any worktree exists).
+    const pinned = run.global_instructions ?? null;
+    const globalInstructions = readGlobalInstructions(
+      pinned?.codex_home ?? run.config.codex_home ?? defaultCodexHome(process.env),
+    );
+    if (pinned && globalInstructions.fingerprint !== pinned.fingerprint) {
+      throw Object.assign(new Error(
+        `global Codex instructions changed since run start: pinned ${describeGlobalInstructions(pinned)}, `
+          + `now ${describeGlobalInstructions(globalInstructions)}`,
+      ), { reason: 'global_instructions_changed' });
+    }
 
     if (resume) {
       if (!exists(s.worktree)) throw new Error(`worktree missing for resume: ${s.worktree}`);
@@ -907,6 +922,7 @@ export class Runner {
       env_names: Object.keys(workerEnv.env).sort(),
       path_entries: workerEnv.path_entries,
       dropped_path_entries: workerEnv.dropped_path_entries,
+      global_instructions: globalInstructions,
       stdin_file: ap.prompt,
       stdout_file: ap.events,
       stderr_file: ap.stderr,

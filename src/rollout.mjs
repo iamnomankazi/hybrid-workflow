@@ -108,6 +108,23 @@ export function readObservedConfig(file) {
   };
 }
 
+// What reached the model besides the task: Codex's skills catalog block, and (when probes for
+// the pinned global instructions file are available) that file's text. Presence only.
+export function readObservedIsolation(file, { globalProbes = null } = {}) {
+  let head;
+  try {
+    head = readHead(file);
+  } catch {
+    return null;
+  }
+  return {
+    skills_catalog_present: head.includes('<skills_instructions>'),
+    global_instructions_present: globalProbes === null
+      ? null
+      : globalProbes.length > 0 && globalProbes.some((probe) => head.includes(JSON.stringify(probe).slice(1, -1))),
+  };
+}
+
 export function compareObserved(requested, observed) {
   if (!observed) return { matches: null, mismatches: [] };
   const pairs = [

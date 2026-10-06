@@ -11,8 +11,8 @@ Mutating commands require `--epoch <n>` equal to the run's current owner epoch.
 | --- | --- | --- |
 | `repo add <alias> <path> [--node-modules junction\|none]` | config | Register a repository alias |
 | `repo list` | — | Show aliases |
-| `doctor` | — | Check node, git, codex, PowerShell/CIM, state and worktree roots |
-| `run start --repo <alias> [--base <ref>] [--goal <text>] [--concurrency <n≤4>]` | creates run | Take the global lock, pin config + base commit, owner epoch 1, launch the runner |
+| `doctor` | — | Check node, git, codex, PowerShell/CIM, state and worktree roots; warn when a global `CODEX_HOME` AGENTS.md exists (it reaches every worker) |
+| `run start --repo <alias> [--base <ref>] [--goal <text>] [--concurrency <n≤4>]` | creates run | Take the global lock, pin config + base commit + global-instructions fingerprint, owner epoch 1, launch the runner |
 | `run list` | — | All runs, newest first |
 | `run close --epoch N` | yes | Refuses while jobs are queued/active; closes the run, stops the runner, releases the global lock |
 | `run unhold --epoch N` | yes | Clear a quota/auth launch hold |

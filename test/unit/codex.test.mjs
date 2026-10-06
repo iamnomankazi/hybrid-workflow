@@ -60,6 +60,7 @@ test('buildExecArgs exact order with defaults', () => {
     '-m', 'gpt-6.1-sol', '-c', 'model_reasoning_effort="high"', '-s', 'workspace-write',
     '-c', 'approval_policy="never"', '-c', 'shell_environment_policy.inherit="core"',
     '-c', 'windows.sandbox="elevated"', '-c', 'project_doc_max_bytes=0',
+    '-c', 'skills.include_instructions=false',
     '-C', 'C:\\wt\\j1', '--json', '-o', 'C:\\a\\last.md', '-',
   ]);
 });
@@ -69,6 +70,7 @@ test('buildExecArgs with schema, projectDocs and unelevated sandbox', () => {
     ...base, sandbox: 'read-only', worktree: 'C:\\wt', outputSchemaFile: 'C:\\s.json', windowsSandbox: 'unelevated', projectDocs: true,
   });
   assert.ok(!args.includes('project_doc_max_bytes=0'));
+  assert.ok(args.includes('skills.include_instructions=false'), 'skills catalog is suppressed even with project docs on');
   assert.ok(args.includes('windows.sandbox="unelevated"'));
   assert.deepEqual(args.slice(-5), ['-o', 'C:\\a\\last.md', '--output-schema', 'C:\\s.json', '-']);
   assert.equal(args[args.indexOf('-s') + 1], 'read-only');
@@ -81,6 +83,7 @@ test('buildResumeArgs exact order, no -s and no -C', () => {
     '-m', 'gpt-6.1-sol', '-c', 'model_reasoning_effort="high"', '-c', 'sandbox_mode="workspace-write"',
     '-c', 'approval_policy="never"', '-c', 'shell_environment_policy.inherit="core"',
     '-c', 'windows.sandbox="elevated"', '-c', 'project_doc_max_bytes=0',
+    '-c', 'skills.include_instructions=false',
     '--json', '-o', 'C:\\a\\last.md', '--output-schema', 'C:\\s.json', SESSION, '-',
   ]);
   assert.ok(!args.includes('-s'));

@@ -55,6 +55,8 @@ Uncaught errors: log to `runner.log`, set `runner.json.status = "crashed"`, rele
 3. **Launch** while `active < max_concurrency`, no hold and queued jobs exist (FIFO by
    `queued_at`):
    1. `queued → launching`, create `attempts/<n>/` (must not contain `launch.json`).
+   1b. Re-read the global Codex instructions fingerprint; if it differs from `run.json.global_instructions`,
+      fail the job as `global_instructions_changed` (no worktree, no worker).
    2. Fresh: `git worktree add --detach` at `spec.base_commit ?? run.base_commit`, then repo
       preparation. Resume: the worktree must exist.
    3. Write `prompt.md` (composed capsule prompt or resume preamble) and record its sha256.

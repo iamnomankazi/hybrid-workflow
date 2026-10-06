@@ -53,8 +53,15 @@ Every worker runs `codex exec --ignore-user-config --strict-config --ignore-rule
 model, reasoning effort, sandbox (`read-only` or `workspace-write` only),
 `approval_policy="never"` and `shell_environment_policy.inherit="core"`, an allowlisted
 environment (no `OPENAI_*`, `ANTHROPIC_*`, `CLAUDE*`, `CODEX_*`, proxies) and a curated `PATH`
-without any `codex`/`claude` executables. The user's global Codex configuration is never read
-or modified.
+without any `codex`/`claude` executables. Project `AGENTS.md` files and the user's Codex skills
+catalog are suppressed. The user's `config.toml` is never loaded, and nothing in `CODEX_HOME` is
+ever modified (Hybrid only hashes the global instructions file, below).
+
+**Known limitation:** Codex 0.160.1 always injects `CODEX_HOME/AGENTS.md` (or
+`AGENTS.override.md`) into workers and offers no switch to disable it. Hybrid pins its
+fingerprint per run, refuses launches if it changes mid-run, records it in every result, and
+`doctor` warns when it exists. Keep that file empty if workers must receive no user-level
+instructions. See docs/ARCHITECTURE.md §9.
 
 ## Tests
 
