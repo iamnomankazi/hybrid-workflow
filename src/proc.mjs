@@ -237,10 +237,17 @@ export async function findProcessesReferencing(needle, { excludePids = [] } = {}
   return parseJsonOutput(stdout).map(toRecord);
 }
 
+// The needle is a path, so a match must end at a path boundary: sweeping worktree ...\j1 must
+// never kill the workers of ...\j10.
+function referencesPath(record, needle) {
+  const boundary = new RegExp(`${needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![A-Za-z0-9_.-])`, 'i');
+  return boundary.test(record.command_line ?? '') || boundary.test(record.exe ?? '');
+}
+
 // Records whose start_time is unknown cannot be identity-verified and are reported as failed
 // rather than killed by bare PID.
 export async function sweepOrphans(needle, { excludePids = [] } = {}) {
-  const found = await findProcessesReferencing(needle, { excludePids });
+  const found = (await findProcessesReferencing(needle, { excludePids })).filter((r) => referencesPath(r, needle));
   const killed = [];
   const failed = [];
   for (const record of found) {

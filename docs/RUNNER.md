@@ -66,14 +66,17 @@ Uncaught errors: log to `runner.log`, set `runner.json.status = "crashed"`, rele
       `failed/launch_failed`.
    Any exception in steps 1–4 → `failed/launch_failed` with the error text.
 4. **Heartbeat** `runner.json` every `heartbeat_ms` (also re-reads `run.json` status).
-5. **Idle exit**: no queued, no active, no pending requests for `runner_idle_exit_minutes`
-   (or the run is closed with nothing active) → `runner.json.status = "exited"`, release the
+5. **Idle exit**: no launchable queued jobs (queued jobs under a launch hold do not count), no
+   active jobs and no pending requests for `runner_idle_exit_minutes` (or the run is closed with
+   nothing active) → `runner.json.status = "exited"`, release the
    lock, exit 0.
 
 ## Finalize (idempotent per attempt)
 
-1. Sweep orphans: every process whose command line or executable path contains the worktree
-   path is killed by identity (records kept in the result).
+1. Sweep orphans: every process whose command line or executable path references the worktree
+   path (matched at a path boundary, so `…\j1` never matches `…\j10`) is killed by identity;
+   records are kept in the result. Any process, including a human's shell, whose command line
+   names a job worktree at finalize time is killed: do not work inside job worktrees by hand.
 2. Summarize `events.jsonl`; read the rollout for observed model/effort/approval/sandbox and
    compare with the request.
 3. Read `last-message.md` (capped at 16 KB) and parse the worker report.

@@ -126,9 +126,15 @@ export function workSummary(home, runId) {
     else if (ACTIVE_STATES.has(s)) active++;
   }
   const requests = pendingRequests(home, runId).length;
+  // Under a quota/auth launch hold, queued jobs wait for an owner decision, not for the runner.
+  let hold = null;
+  try {
+    hold = readJson(runPaths(home, runId).runner, { optional: true })?.hold ?? null;
+  } catch { /* runner.json mid-write: treat as no hold */ }
+  const launchable = hold ? 0 : queued;
   return {
-    jobs, counts, queued, active, pendingSubmits, requests,
-    busy: queued + active + pendingSubmits + requests > 0,
+    jobs, counts, queued, active, pendingSubmits, requests, hold,
+    busy: launchable + active + pendingSubmits + requests > 0,
     nonTerminal: jobs.filter((j) => !j.state || !TERMINAL_STATES.has(j.state.state)).map((j) => j.id),
   };
 }

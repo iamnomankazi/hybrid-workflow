@@ -20,7 +20,7 @@ Mutating commands require `--epoch <n>` equal to the run's current owner epoch.
 | `takeover [--session S]` | owner | Increment the epoch and become owner |
 | `submit <spec.json> --epoch N [--no-wait]` | yes | Validate, store spec + capsule, queue the job |
 | `status [<job>] [--changed [--since N]]` | cursor only | Run/job summary; `--changed` = transitions since the session cursor |
-| `wait [--any] [--since N] [--timeout 50m] [--debounce 60s]` | — | Block until a wake transition, `runner_down`, `idle` or timeout |
+| `wait [--any] [--since N] [--timeout 50m] [--debounce 60s]` | — | Block until a wake transition (batched for `--debounce`; `--any` returns at the first), `runner_down`, `idle` (nothing launchable or active) or timeout |
 | `result <job> [--json]` | — | Outcome, worker report (≤16 KB), patch verdict and provenance |
 | `cancel <job> --epoch N` | yes | Cancel a queued or active job (tree kill + orphan sweep + patch capture) |
 | `resume <job> --epoch N [--note <text> \| --note-file <f>]` | yes | Queue a new attempt of the same Codex session with pinned flags |
