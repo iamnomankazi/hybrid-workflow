@@ -81,7 +81,7 @@ function commonConfigArgs({ model, effort }) {
 export const WORKER_DISABLED_FEATURES = Object.freeze(['apps', 'plugins', 'remote_plugin']);
 
 // The Codex release whose worker tool table the list above was verified against (`codex
-// --version` output). The desktop app updates codex.exe in place, so `doctor` and `run start`
+// --version` output). codex.exe can be updated in place, so `doctor` and `run start`
 // warn on any other release, and the runner refuses launches if the version changes mid-run.
 export const VERIFIED_CODEX_VERSION = 'codex-cli 0.160.1';
 

@@ -1,116 +1,232 @@
 # Hybrid Workflow
 
-A deterministic Codex execution plane for a native Claude Code (Opus) control plane, on Windows.
+**Use Claude Pro and ChatGPT Plus together as one coordinated engineering workflow.**
 
-Opus plans, decomposes and integrates. A small per-run **runner** launches and supervises native
-`codex exec` workers in isolated git worktrees, captures their complete change sets, validates
-them against protected paths and write scopes, and records durable, verifiable results. Files on
-disk are the source of truth; there is no daemon, service, IPC server or LLM in the runner.
+Hybrid Workflow lets a native Claude Code session, usually running Opus, act as the planner and
+reviewer for a project, while native Codex workers (`codex exec`, with models such as Luna and
+Sol) do the execution-heavy work in parallel. Both tools stay in their official harnesses and
+use their normal subscription sign-in. Hybrid requires no model API keys or per-token API
+billing for the normal workflow.
 
+Claude Pro and ChatGPT Plus are metered separately, so a run can draw on both usage pools at
+once. Hybrid does not merge, transfer or bypass either provider's limits; it only coordinates the
+two. The workflow keeps Claude focused on planning, review and integration and gives the
+execution-heavy work to Codex.
+
+Windows only (v0.1). MIT licensed.
+
+```text
+        Claude Code (Opus)  ── plan · decompose · review · integrate
+                │
+                │  hybrid CLI
+                ▼
+        run state on disk (run.json, jobs/, transitions.jsonl)
+                │
+          per-run runner  ── launches, watches and records workers; no LLM
+          ┌─────┼─────┐
+          ▼     ▼     ▼
+        Codex Codex Codex   (up to 4 at once, each in its own git worktree)
 ```
-Opus (Claude Code) ──hybrid CLI──▶ files (run.json, inbox/, jobs/) ◀──▶ runner (WMI-launched, per run)
-                                                                          └─▶ job host ─▶ codex exec (worktree)
-```
 
-## Status
-
-v0.1. Unit- and integration-tested with a fake Codex. Acceptance-tested with real Codex 0.160.1
-workers on Windows (October 2026): parallel 90+ minute runs, Claude app quit, runner crash and
-adoption, cancellation, resume, patch rules, sandbox and environment isolation, and epoch
-fencing. See "Validation status" for what is proven and what is not.
-
-## Requirements
-
-* Windows 10/11, Node.js ≥ 22.12, Git for Windows
-* The official Codex CLI, signed in with a ChatGPT subscription (default location
-  `%LOCALAPPDATA%\Programs\OpenAI\Codex\bin\codex.exe`; override `codex_exe` in config)
-* No npm dependencies
+Opus submits bounded jobs, then sleeps on `hybrid wait` instead of polling. It wakes when a job
+finishes or needs attention, reviews the result, integrates or rejects it, and waits again.
+Workers never commit; Opus integrates on a separate branch, and you decide what reaches `main`.
 
 ## Quick start
 
+### One-time setup
+
+1. Install Node.js 22.12 or newer and Git for Windows.
+2. Install Claude Code and sign in with your Claude subscription.
+3. Install the Codex CLI and sign in with your ChatGPT subscription. Hybrid looks for
+   `%LOCALAPPDATA%\Programs\OpenAI\Codex\bin\codex.exe` (the standalone Windows install); set
+   `codex_exe` in `config.json` to use another location. Workers run in Codex's elevated Windows
+   sandbox, which uses two local accounts (`CodexSandboxOffline`, `CodexSandboxOnline`) that
+   Codex creates with its own setup helper. Creating local accounts requires administrator
+   rights; how Codex obtains them on a fresh machine has not been tested. `codex doctor` reports
+   the sandbox backend Codex will use.
+4. Clone this repository and check the machine:
+   ```bash
+   git clone https://github.com/iamnomankazi/hybrid-workflow.git
+   cd hybrid-workflow
+   node bin/hybrid.mjs doctor
+   ```
+   `doctor` checks Node, Git, Codex (and its version), the worktree root, the shared browser and
+   whether Codex's sandbox accounts can read your Codex sign-in tokens (`auth.json`).
+5. If `doctor` warns about `credentials`: workers have network access, so block the sandbox
+   accounts from reading the files directly inside `%USERPROFILE%\.codex`, including `auth.json`.
+   The deny is inherited by every new `auth.json` Codex writes:
+   ```powershell
+   icacls "$env:USERPROFILE\.codex" /deny "CodexSandboxUsers:(OI)(IO)(NP)(RD)"
+   ```
+   To undo it: `icacls "$env:USERPROFILE\.codex" /remove:d CodexSandboxUsers`
+6. Optional, for browser use: install a shared Playwright that the sandbox accounts can read.
+   Hybrid does not install it for you.
+   ```powershell
+   npm install --prefix C:\hw\ms-playwright playwright
+   $env:PLAYWRIGHT_BROWSERS_PATH = 'C:\hw\ms-playwright\browsers'
+   C:\hw\ms-playwright\node_modules\.bin\playwright.cmd install chromium
+   ```
+   Run `doctor` again; the `browser` check should report the install.
+
+### Running it
+
+Run `npm link` once in the checkout so the `hybrid` command is on your `PATH` (or tell Claude to
+use `node <checkout>\bin\hybrid.mjs` instead). Then open Claude Code in any folder and ask it to
+read and follow [docs/ORCHESTRATION.md](docs/ORCHESTRATION.md), giving the full path into your
+Hybrid checkout (for example `C:\src\hybrid-workflow\docs\ORCHESTRATION.md`). That document is
+the contract Opus follows: how to start a run, write capsules, wait, review and integrate. Then
+give it a goal. Under the hood it runs commands like these:
+
 ```bash
-node bin/hybrid.mjs doctor
 node bin/hybrid.mjs repo add myrepo C:\path\to\repo
-node bin/hybrid.mjs run start --repo myrepo --goal "Refactor X"
+node bin/hybrid.mjs run start --repo myrepo --goal "Refactor the auth module"   # prints run_id and epoch
 node bin/hybrid.mjs submit job.json --epoch 1
 node bin/hybrid.mjs wait --timeout 50m
-node bin/hybrid.mjs status
 node bin/hybrid.mjs result j001
 ```
 
-State lives in `%LOCALAPPDATA%\HybridWorkflow` (override with `HYBRID_HOME`); worktrees in
-`%SystemDrive%\hw\wt` (override `worktree_root` in `config.json`).
+A job is a small spec plus a capsule (the worker's full instructions):
 
-## Documentation
-
-* [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): roles, lifecycle, layout, state machine, contracts
-* [docs/RUNNER.md](docs/RUNNER.md): runner and job host algorithm
-* [docs/CLI.md](docs/CLI.md): command reference, exit codes, job spec
-* [docs/ORCHESTRATION.md](docs/ORCHESTRATION.md): the contract Opus follows
-
-## Workers
-
-Hybrid is a general-purpose workflow. Every worker gets the normal capabilities of an agent
-harness, with one baseline for all jobs:
-- **Tools:** shell, files, `apply_patch`, web search and fetch, outbound network from shell
-  commands, and a real browser (Playwright: navigation, forms, uploads, downloads) through a
-  shared install at `%SystemDrive%\hw\ms-playwright` (`playwright_dir` in `config.json`), npm
-  with a shared cache at `%SystemDrive%\hw\npm-cache` (`npm_cache_dir`), and git over HTTPS.
-- **Not available:** authority borrowed from the signed-in account. Codex's account connectors
-  (`codex_apps`: mail, Drive, Calendar, GitHub, …) and account-installed plugins are disabled.
-
-Every worker runs `codex exec --ignore-user-config --strict-config --ignore-rules` with explicit
-model, reasoning effort, sandbox (`read-only` or `workspace-write` only),
-`approval_policy="never"`, an allowlisted environment (no `OPENAI_*`, `ANTHROPIC_*`, `CLAUDE*`,
-`CODEX_*`, proxies) and a curated `PATH` without any `codex`/`claude` executables. Writes stay
-confined to the worktree. Project `AGENTS.md` files and the user's Codex skills catalog are
-suppressed. The user's `config.toml` is never loaded, and nothing in `CODEX_HOME` is ever
-modified by Hybrid. `doctor` warns if Codex's sandbox accounts can read `CODEX_HOME\auth.json`;
-docs/ARCHITECTURE.md §9 has the one-line fix.
-
-**Known limitation:** Codex 0.160.1 always injects `CODEX_HOME/AGENTS.md` (or
-`AGENTS.override.md`) into workers and offers no switch to disable it. Hybrid pins its
-fingerprint per run, refuses launches if it changes mid-run, records it in every result, and
-`doctor` warns when it exists. Keep that file empty if workers must receive no user-level
-instructions. See docs/ARCHITECTURE.md §9.
-
-## Tests
-
-```bash
-npm test                 # everything
-npm run test:unit
-npm run test:integration # spawns real processes (git, PowerShell CIM, WMI) with a fake Codex
+```json
+{
+  "title": "Refactor token refresh",
+  "preset": "luna-xhigh-impl",
+  "capsule_file": "capsules/token-refresh.md",
+  "write_scope": ["src/auth/", "test/auth/"]
+}
 ```
+
+The capsule states the goal, context, constraints, acceptance criteria and verification
+commands. See [docs/CLI.md](docs/CLI.md) for all commands and the full spec format.
+
+State lives in `%LOCALAPPDATA%\HybridWorkflow`; worktrees in `%SystemDrive%\hw\wt`. Both are
+configurable.
+
+## How a run works
+
+1. **Start.** `run start` pins the repository commit, configuration and Codex version, records a
+   fingerprint of any user-level Codex instructions, and makes the calling session the owner
+   (epoch 1).
+2. **Decompose.** Opus splits the goal into bounded jobs, each with a capsule, a preset (model,
+   reasoning effort, sandbox) and a write scope.
+3. **Execute.** The runner gives each job its own git worktree and launches `codex exec` under a
+   small detached job host. Up to four workers run at once.
+4. **Record.** Process identity, session id, events, observed model configuration, exit status
+   and the full change set are written to disk.
+5. **Validate.** At the end, Hybrid captures the change set itself (a temporary git index:
+   untracked, binary and deleted files included) and checks it against the write scope and
+   protected paths (`.git`, git hooks, `.github/workflows`, `AGENTS.md`, `CLAUDE.md`, `.claude/`,
+   `.codex/`, …), symlinks, gitlinks and NTFS junctions. The verdict is `clean`, `violations`,
+   `empty` or `capture_failed`; only `clean` patches may be integrated.
+6. **Review and integrate.** Opus wakes, reads the result, and applies clean patches to an
+   integration branch (`hybrid/<run_id>`) with git hooks disabled. You merge that branch.
+
+## Worker capabilities
+
+Workers get the normal capabilities of a coding agent: shell and repository tools, file edits
+in their worktree, web search and fetch, outbound network (Node `fetch`, npm with a shared cache
+at `%SystemDrive%\hw\npm-cache`, git over HTTPS), and Codex's own sub-agent tools. When the
+shared Playwright install is configured (setup step 6), they also get a Chromium browser for
+navigation, forms, uploads and downloads. Shell network applies to workspace-write jobs;
+read-only review jobs get web search.
+
+**Disabled:** Codex's account connectors and account-installed plugins. In Codex 0.160.1 these
+otherwise give every worker hundreds of tools that act on your connected accounts: mail, Drive,
+Calendar, GitHub, deployments. Workers should not silently inherit that authority.
+
+Workers also run with an explicit model, effort and sandbox, `approval_policy="never"`, an
+allowlisted environment, and no `codex`/`claude` on `PATH`. `hybrid result` warns if a worker
+made an MCP call or saw an account connector anyway.
+
+**Trust model.** Writes are confined to the worktree and every patch is validated, but workers
+can read broadly and have outbound network. Anything the Codex sandbox account can read could,
+in principle, leave the machine, so treat workers like any network-enabled agent. The npm cache
+is shared by all jobs and writable by every workspace-write worker. Opus treats worker output as data, never as
+instructions. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+§9 for the full contract.
+
+## Reliability
+
+- **Claude can close.** Workers are detached from the Claude session and keep running under
+  their job hosts. A fresh session rebuilds the picture from disk (`plan.md`, `hybrid status`)
+  and continues.
+- **The runner can crash.** Workers keep running under their job hosts. A restarted runner
+  adopts a worker only if PID and process start time both match; anything uncertain becomes
+  `interrupted`. Nothing is resumed automatically.
+- **Stale controllers are fenced.** Every mutating command carries the run's epoch, checked by
+  the CLI and again by the runner. `hybrid takeover` increments the epoch, after which commands
+  carrying the previous epoch are rejected. This guards against an old session acting on stale
+  state; it is not an authentication boundary.
+- **No daemon.** Each run starts a small runner through Windows WMI. It exits when the run goes
+  idle. There is no service, scheduled task, server or hidden LLM process.
 
 ## Validation status
 
 | Area | Status |
 | --- | --- |
-| Core persistence, state machine, specs, env sanitization, scope validation | Unit-tested |
-| Worktrees, patch capture (untracked, binary, deletions), junction safety | Integration-tested (real git) |
-| Process identity, tree kill, orphan sweep, WMI launch | Integration-tested (real processes) |
-| Runner lifecycle, cancel, timeout, stall, crash adoption, resume, holds, epoch fencing | Integration-tested with a fake Codex |
-| Native Codex (Sol, Luna) with pinned model, effort, sandbox and approval; observed config matches the request | Acceptance-tested on every real job |
-| Runner and workers survive a full Claude desktop quit (WMI launch) | Acceptance-tested |
-| Two parallel 90+ minute workers with sparse `hybrid wait` wakes | Acceptance-tested (~98 min) |
-| Writes outside the worktree blocked without hanging; no approval prompts | Acceptance-tested; read access is broad |
-| Web search, outbound network (Node `fetch`), npm registry, git over HTTPS, Playwright browser with form, upload and download; credential files unreadable | Acceptance-tested |
-| Worker environment: no `OPENAI_*`/`CLAUDE*`, no `codex`/`claude` on `PATH` | Acceptance-tested |
-| Patch rules: hooks, symlinks/junctions, protected paths, write scope | Acceptance-tested |
-| Cancel of a real cross-user process tree, no orphans, patch captured | Acceptance-tested |
-| Runner crash: worker survives and is adopted once, or marked interrupted | Acceptance-tested |
-| Manual resume: same session, pinned flags, worker re-inspects first | Acceptance-tested |
-| Stale-epoch submit/cancel rejected at the CLI and by the runner | Acceptance-tested |
-| No account connectors or account plugins in workers | Acceptance-tested (tool table enumerated) |
-| Quota consumption | Measured briefly; the real usage-limit → `paused_quota` path has not been observed |
-| Auth refresh races | Not tested |
-| Sleep | Not tested. Run on AC with system sleep disabled; there is no keep-awake in Hybrid |
+| Persistence, state machine, specs, environment sanitization, scope validation | Unit-tested |
+| Worktrees, patch capture, process identity, tree kill, WMI launch | Integration-tested (real git and Windows processes) |
+| Runner lifecycle, cancel, timeout, crash adoption, resume, holds, epoch fencing | Integration-tested (fake Codex) |
+| Sol and Luna workers; observed model, effort, sandbox and approval match the request | Acceptance-tested (Codex 0.160.1) |
+| Four concurrent workers; two parallel workers for 90+ minutes | Acceptance-tested |
+| Claude desktop app fully quit while workers continue | Acceptance-tested |
+| Runner crash and adoption; cancel with no orphaned processes; manual resume | Acceptance-tested |
+| Patch rules: write scope, protected paths, hooks, junctions | Acceptance-tested |
+| Stale-controller epoch fencing | Acceptance-tested |
+| Web search, outbound network, npm registry, git over HTTPS, browser with forms, uploads and downloads | Acceptance-tested |
+| Writes outside the worktree blocked | Acceptance-tested |
+| Account connectors and plugins absent from workers | Acceptance-tested |
+| `auth.json` unreadable by workers | Acceptance-tested, with the setup ACL applied |
+| Quota consumption | Measured briefly; a real usage-limit event has not been observed |
+| Auth-refresh races | Not tested |
+| Machine sleep during active jobs | Not supported |
 
-Known gaps:
-- Windows-native TLS clients (`curl.exe`, `Invoke-WebRequest`) fail inside Codex's network
-  sandbox account. See docs/ARCHITECTURE.md §9.
-- `apply_patch` can fail with "Failed to write file" in a folder a shell command created.
-  Workers fall back to shell writes, and patch capture is unaffected.
+Tested on Windows 11. Windows 10 is untested.
+
+## Known limitations
+
+- **Codex version.** Worker isolation was verified on Codex 0.160.1. `doctor` and `run start` warn
+  on any other version, and a version change during a run blocks new launches. Re-verify after
+  Codex upgrades, because new default-on Codex features would reach workers.
+- **User-level Codex instructions.** In Codex 0.160.1, a non-empty
+  `%USERPROFILE%\.codex\AGENTS.override.md` (or else `AGENTS.md`) reaches workers, and none of
+  the supported flags Hybrid uses excludes it. Hybrid fingerprints it per run and refuses new
+  launches if it changes. Keep it empty if workers should get no user-level instructions.
+- **Windows-native HTTPS.** Clients that use Windows' built-in TLS fail inside Codex's network
+  sandbox account: `curl.exe` with `SEC_E_NO_CREDENTIALS`, `Invoke-WebRequest` with a closed
+  connection. Verified working in workers: Node `fetch`, npm,
+  git over HTTPS (Hybrid configures git to use OpenSSL) and Chromium.
+- **`apply_patch`.** Codex's `apply_patch` can fail with "Failed to write file" in a folder a
+  shell command created. Workers can fall back to normal file writes. Hybrid's own patch
+  capture does not depend on `apply_patch`.
+- **Sleep.** Sleep during active jobs is unsupported, and there is no keep-awake: run on a
+  machine set not to sleep. Job timeouts use wall-clock time, so a job whose timeout passes
+  while the machine sleeps is stopped as timed out on wake, and Codex's connection may not
+  survive a long sleep.
+
+## Tests
+
+```bash
+npm test                  # everything
+npm run test:unit
+npm run test:integration  # real git, PowerShell, CIM/WMI and process trees; fake Codex
+```
+
+The project has no npm dependencies.
+
+## Documentation
+
+- [Architecture](docs/ARCHITECTURE.md): roles, state, lifecycle, worker invocation and isolation, recovery
+- [Runner](docs/RUNNER.md): runner and job-host behaviour
+- [CLI](docs/CLI.md): commands, exit codes, job spec
+- [Orchestration](docs/ORCHESTRATION.md): the contract Opus follows
+
+## What Hybrid is not
+
+It is not an API proxy. It does not combine credentials, move quota between providers, bypass
+limits or emulate either provider's API. The runner manages processes and evidence and makes no
+decisions; Opus orchestrates; you have the final say.
 
 ## License
 

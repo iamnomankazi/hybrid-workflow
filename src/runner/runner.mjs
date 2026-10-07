@@ -878,8 +878,8 @@ export class Runner {
       ), { reason: 'global_instructions_changed' });
     }
 
-    // Worker isolation flags are verified per Codex release, and the desktop app updates codex.exe
-    // in place; run start pinned the version, so a different one refuses the launch. An unreadable
+    // Worker isolation flags are verified per Codex release, and codex.exe can be
+    // updated in place; run start pinned the version, so a different one refuses the launch. An unreadable
     // version is recorded as null and left to the launch itself to fail.
     let codexVersionNow = null;
     try {

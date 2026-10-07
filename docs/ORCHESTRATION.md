@@ -1,7 +1,8 @@
 # Opus orchestration contract
 
-How a native Claude Code (Opus) session drives Hybrid Workflow. Written to be loaded as a
-skill or mode file. The runner is not an orchestrator: every judgment below is Opus's.
+How a native Claude Code (Opus) session drives Hybrid Workflow. Ask the session to read and
+follow this document before starting a run. The runner is not an orchestrator: every judgment
+below is Opus's.
 
 ## Division of labour
 
@@ -42,7 +43,8 @@ from disk alone.
 ## Writing capsules
 
 Workers run with `--ignore-user-config`, `--ignore-rules` and project docs disabled: they do
-**not** see AGENTS.md/CLAUDE.md or your conversation. Everything required goes in the capsule:
+**not** see the project's AGENTS.md/CLAUDE.md or your conversation (a user-level
+`~/.codex/AGENTS.md`, if present, does reach them). Everything required goes in the capsule:
 
 ```markdown
 ## Goal
@@ -54,7 +56,7 @@ Workers run with `--ignore-user-config`, `--ignore-rules` and project docs disab
 ## Acceptance criteria
 - <observable, checkable>
 ## Verification
-<exact commands to run, e.g. `node --test test/foo.test.mjs`; no network, no installs>
+<exact commands to run, e.g. `node --test test/foo.test.mjs`>
 ## Out of scope
 <explicitly>
 ```

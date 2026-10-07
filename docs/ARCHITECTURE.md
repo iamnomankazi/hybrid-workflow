@@ -252,7 +252,7 @@ its own tool table (`Object.keys(tools)` in its code cell): 518 tool names witho
 no MCP servers with them. Re-verify on every Codex upgrade, because new default-on features
 would reach workers.
 
-The Codex desktop app updates `codex.exe` in place, so the verified release is pinned in code
+`codex.exe` can be updated in place (for example by `codex update`), so the verified release is pinned in code
 (`VERIFIED_CODEX_VERSION`) and guarded:
 
 * `doctor` and `run start` warn when `codex --version` is any other release.
