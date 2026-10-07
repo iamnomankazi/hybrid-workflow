@@ -65,6 +65,7 @@ test('loadMachineConfig is strict', () => {
     bad({ codex_prefix_args: [1] }, /codex_prefix_args/);
     bad({ worktree_root: 'rel' }, /worktree_root/);
     bad({ playwright_dir: 'rel' }, /playwright_dir/);
+    bad({ npm_cache_dir: 'rel' }, /npm_cache_dir/);
     bad({ codex_home: 5 }, /codex_home/);
     bad({ project_docs: 'yes' }, /project_docs/);
     bad({ extra_path: ['rel'] }, /extra_path/);
@@ -124,6 +125,7 @@ const fakeResolvers = {
   resolveCodexExe: (configured) => configured ?? 'C:\\fake\\codex.exe',
   defaultWorktreeRoot: () => 'C:\\hw\\wt',
   defaultPlaywrightDir: () => 'C:\\hw\\ms-playwright',
+  defaultNpmCacheDir: () => 'C:\\hw\\npm-cache',
 };
 
 test('buildRunConfig pins settings and clamps concurrency to the v1 maximum', () => {
@@ -133,6 +135,7 @@ test('buildRunConfig pins settings and clamps concurrency to the v1 maximum', ()
   assert.equal(rc.codex_exe, 'C:\\fake\\codex.exe');
   assert.equal(rc.worktree_root, path.resolve('C:\\hw\\wt'));
   assert.equal(rc.playwright_dir, path.resolve('C:\\hw\\ms-playwright'));
+  assert.equal(rc.npm_cache_dir, path.resolve('C:\\hw\\npm-cache'));
   assert.equal(rc.codex_home, null);
   assert.deepEqual(rc.extra_path, ['C:\\tools']);
   assert.equal(Object.keys(rc.presets).length, 5);

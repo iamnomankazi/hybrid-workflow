@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { SCHEMAS, V1_MAX_CONCURRENCY } from './constants.mjs';
 import { ensureDir, readJson, writeJsonAtomic } from './fsutil.mjs';
-import { defaultPlaywrightDir, defaultWorktreeRoot, homePaths } from './paths.mjs';
+import { defaultNpmCacheDir, defaultPlaywrightDir, defaultWorktreeRoot, homePaths } from './paths.mjs';
 import { WINDOWS_SANDBOXES, resolveCodexExe } from './codex.mjs';
 import { NAME_RE, resolvePresets } from './spec.mjs';
 
@@ -13,6 +13,7 @@ export const DEFAULTS = Object.freeze({
   codex_home: null,
   worktree_root: null,
   playwright_dir: null,
+  npm_cache_dir: null,
   max_concurrency: 4,
   default_timeout_minutes: 120,
   max_timeout_minutes: 360,
@@ -75,6 +76,7 @@ function mergeConfig(raw) {
   if (cfg.codex_home !== null && !isAbsPath(cfg.codex_home)) throw new Error('codex_home must be null or an absolute path');
   if (cfg.worktree_root !== null && !isAbsPath(cfg.worktree_root)) throw new Error('worktree_root must be null or an absolute path');
   if (cfg.playwright_dir !== null && !isAbsPath(cfg.playwright_dir)) throw new Error('playwright_dir must be null or an absolute path');
+  if (cfg.npm_cache_dir !== null && !isAbsPath(cfg.npm_cache_dir)) throw new Error('npm_cache_dir must be null or an absolute path');
   if (!WINDOWS_SANDBOXES.includes(cfg.windows_sandbox)) {
     throw new Error(`windows_sandbox must be one of ${WINDOWS_SANDBOXES.join(', ')}`);
   }
@@ -130,6 +132,7 @@ export function buildRunConfig(machine, { concurrency } = {}, {
   resolveCodexExe: resolveExe = resolveCodexExe,
   defaultWorktreeRoot: defaultRoot = defaultWorktreeRoot,
   defaultPlaywrightDir: defaultPlaywright = defaultPlaywrightDir,
+  defaultNpmCacheDir: defaultNpmCache = defaultNpmCacheDir,
 } = {}) {
   const requested = concurrency ?? machine.max_concurrency;
   if (!Number.isInteger(requested)) throw new Error('concurrency must be an integer');
@@ -139,6 +142,7 @@ export function buildRunConfig(machine, { concurrency } = {}, {
     codex_home: machine.codex_home ? path.resolve(machine.codex_home) : null,
     worktree_root: path.resolve(machine.worktree_root ?? defaultRoot()),
     playwright_dir: path.resolve(machine.playwright_dir ?? defaultPlaywright()),
+    npm_cache_dir: path.resolve(machine.npm_cache_dir ?? defaultNpmCache()),
     max_concurrency: Math.max(1, Math.min(requested, V1_MAX_CONCURRENCY)),
     default_timeout_minutes: machine.default_timeout_minutes,
     max_timeout_minutes: machine.max_timeout_minutes,

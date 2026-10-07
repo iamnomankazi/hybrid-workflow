@@ -97,14 +97,16 @@ export function unverifiedCodexWarning(version) {
 // to the worktree by the sandbox. The setting applies to workspace-write; read-only presets
 // (reviewers) keep Codex's read-only defaults. inherit="core" strips everything else from the
 // shell's environment, so variables commands need (shared browser, script policy) go through
-// shell_environment_policy.set.
-function tailConfigArgs({ windowsSandbox, projectDocs, shellEnv }) {
+// shell_environment_policy.set. Extra writable roots (e.g. a shared npm cache) are granted by
+// Codex's own sandbox setup, not by Hybrid editing ACLs.
+function tailConfigArgs({ windowsSandbox, projectDocs, shellEnv, writableRoots }) {
   return [
     '-c', 'approval_policy="never"',
     '-c', 'shell_environment_policy.inherit="core"',
     ...shellEnvArgs(shellEnv),
     '-c', `windows.sandbox="${windowsSandbox}"`,
     '-c', 'sandbox_workspace_write.network_access=true',
+    ...writableRootsArgs(writableRoots),
     ...(projectDocs ? [] : ['-c', 'project_doc_max_bytes=0']),
     '-c', 'skills.include_instructions=false',
     ...WORKER_DISABLED_FEATURES.flatMap((f) => ['-c', `features.${f}=false`]),
@@ -113,7 +115,15 @@ function tailConfigArgs({ windowsSandbox, projectDocs, shellEnv }) {
 
 // Shell variables every worker gets. PowerShell's execution policy is not a security boundary,
 // and Restricted (the sandbox accounts' default) breaks local scripts and .ps1 shims such as npm.
-export const BASE_SHELL_ENV = Object.freeze({ PSExecutionPolicyPreference: 'RemoteSigned' });
+// Git for Windows defaults to Schannel, which fails under the network sandbox account
+// (SEC_E_NO_CREDENTIALS); its bundled OpenSSL backend works, so git gets http.sslBackend=openssl
+// through git's own environment config (GIT_CONFIG_COUNT/KEY/VALUE), for worker shells only.
+export const BASE_SHELL_ENV = Object.freeze({
+  PSExecutionPolicyPreference: 'RemoteSigned',
+  GIT_CONFIG_COUNT: '1',
+  GIT_CONFIG_KEY_0: 'http.sslBackend',
+  GIT_CONFIG_VALUE_0: 'openssl',
+});
 
 // TOML literal strings ('...') need no escaping for Windows paths but cannot hold ' or newlines.
 function shellEnvArgs(shellEnv = {}) {
@@ -124,9 +134,17 @@ function shellEnvArgs(shellEnv = {}) {
   });
 }
 
+function writableRootsArgs(roots = []) {
+  if (!roots.length) return [];
+  for (const root of roots) {
+    if (typeof root !== 'string' || !path.isAbsolute(root) || /['\r\n]/.test(root)) throw new Error(`Invalid writable root: ${root}`);
+  }
+  return ['-c', `sandbox_workspace_write.writable_roots=[${roots.map((r) => `'${r}'`).join(', ')}]`];
+}
+
 export function buildExecArgs({
   model, effort, sandbox, worktree, lastMessageFile, outputSchemaFile = null,
-  windowsSandbox = 'elevated', projectDocs = false, shellEnv = BASE_SHELL_ENV,
+  windowsSandbox = 'elevated', projectDocs = false, shellEnv = BASE_SHELL_ENV, writableRoots = [],
 }) {
   checkEnums({ model, effort, sandbox, windowsSandbox });
   checkPath('worktree', worktree);
@@ -136,7 +154,7 @@ export function buildExecArgs({
     'exec', '--ignore-user-config', '--strict-config', '--ignore-rules', '--skip-git-repo-check',
     ...commonConfigArgs({ model, effort }),
     '-s', sandbox,
-    ...tailConfigArgs({ windowsSandbox, projectDocs, shellEnv }),
+    ...tailConfigArgs({ windowsSandbox, projectDocs, shellEnv, writableRoots }),
     '-C', worktree,
     '--json', '-o', lastMessageFile,
     ...(outputSchemaFile ? ['--output-schema', outputSchemaFile] : []),
@@ -149,7 +167,7 @@ export function buildExecArgs({
 // `codex exec resume` has neither -s nor -C: the sandbox goes through -c, the cwd is the process cwd.
 export function buildResumeArgs({
   model, effort, sandbox, sessionId, lastMessageFile, outputSchemaFile = null,
-  windowsSandbox = 'elevated', projectDocs = false, shellEnv = BASE_SHELL_ENV,
+  windowsSandbox = 'elevated', projectDocs = false, shellEnv = BASE_SHELL_ENV, writableRoots = [],
 }) {
   checkEnums({ model, effort, sandbox, windowsSandbox });
   if (typeof sessionId !== 'string' || !SESSION_ID_RE.test(sessionId)) throw new Error(`Invalid session id: ${sessionId}`);
@@ -159,7 +177,7 @@ export function buildResumeArgs({
     'exec', 'resume', '--ignore-user-config', '--strict-config', '--ignore-rules', '--skip-git-repo-check',
     ...commonConfigArgs({ model, effort }),
     '-c', `sandbox_mode="${sandbox}"`,
-    ...tailConfigArgs({ windowsSandbox, projectDocs, shellEnv }),
+    ...tailConfigArgs({ windowsSandbox, projectDocs, shellEnv, writableRoots }),
     '--json', '-o', lastMessageFile,
     ...(outputSchemaFile ? ['--output-schema', outputSchemaFile] : []),
     sessionId, '-',

@@ -67,6 +67,9 @@ test('buildExecArgs exact order with defaults', () => {
     '-m', 'gpt-6.1-sol', '-c', 'model_reasoning_effort="high"', '-s', 'workspace-write',
     '-c', 'approval_policy="never"', '-c', 'shell_environment_policy.inherit="core"',
     '-c', "shell_environment_policy.set.PSExecutionPolicyPreference='RemoteSigned'",
+    '-c', "shell_environment_policy.set.GIT_CONFIG_COUNT='1'",
+    '-c', "shell_environment_policy.set.GIT_CONFIG_KEY_0='http.sslBackend'",
+    '-c', "shell_environment_policy.set.GIT_CONFIG_VALUE_0='openssl'",
     '-c', 'windows.sandbox="elevated"', '-c', 'sandbox_workspace_write.network_access=true',
     '-c', 'project_doc_max_bytes=0', '-c', 'skills.include_instructions=false',
     '-c', 'features.apps=false', '-c', 'features.plugins=false', '-c', 'features.remote_plugin=false',
@@ -95,6 +98,9 @@ test('buildResumeArgs exact order, no -s and no -C', () => {
     '-m', 'gpt-6.1-sol', '-c', 'model_reasoning_effort="high"', '-c', 'sandbox_mode="workspace-write"',
     '-c', 'approval_policy="never"', '-c', 'shell_environment_policy.inherit="core"',
     '-c', "shell_environment_policy.set.PSExecutionPolicyPreference='RemoteSigned'",
+    '-c', "shell_environment_policy.set.GIT_CONFIG_COUNT='1'",
+    '-c', "shell_environment_policy.set.GIT_CONFIG_KEY_0='http.sslBackend'",
+    '-c', "shell_environment_policy.set.GIT_CONFIG_VALUE_0='openssl'",
     '-c', 'windows.sandbox="elevated"', '-c', 'sandbox_workspace_write.network_access=true',
     '-c', 'project_doc_max_bytes=0', '-c', 'skills.include_instructions=false',
     '-c', 'features.apps=false', '-c', 'features.plugins=false', '-c', 'features.remote_plugin=false',
@@ -233,6 +239,15 @@ test('shell variables reach commands through shell_environment_policy.set as TOM
   assert.ok(buildResumeArgs({ ...base, sessionId: SESSION, shellEnv: { A: 'b' } }).includes("shell_environment_policy.set.A='b'"));
   assert.throws(() => buildExecArgs({ ...base, worktree: 'C:\\wt', shellEnv: { X: "it's" } }), /Invalid value/);
   assert.throws(() => buildExecArgs({ ...base, worktree: 'C:\\wt', shellEnv: { 'A=B': 'x' } }), /Invalid shell variable name/);
+});
+
+test('extra writable roots become one sandbox_workspace_write.writable_roots TOML array', () => {
+  const args = buildExecArgs({ ...base, worktree: 'C:\\wt', writableRoots: ['C:\\hw\\npm-cache', 'D:\\x'] });
+  assert.ok(args.includes("sandbox_workspace_write.writable_roots=['C:\\hw\\npm-cache', 'D:\\x']"));
+  assert.ok(!buildExecArgs({ ...base, worktree: 'C:\\wt' }).some((a) => a.includes('writable_roots')), 'none by default');
+  assert.ok(buildResumeArgs({ ...base, sessionId: SESSION, writableRoots: ['C:\\c'] }).includes("sandbox_workspace_write.writable_roots=['C:\\c']"));
+  assert.throws(() => buildExecArgs({ ...base, worktree: 'C:\\wt', writableRoots: ['relative'] }), /Invalid writable root/);
+  assert.throws(() => buildExecArgs({ ...base, worktree: 'C:\\wt', writableRoots: ["C:\\it's"] }), /Invalid writable root/);
 });
 
 test('assertCleanEnv guard', () => {

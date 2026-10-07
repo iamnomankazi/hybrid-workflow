@@ -912,11 +912,20 @@ export class Runner {
     this.persist(job, { prompt_sha256: sha256(prompt) });
 
     const { model, effort, sandbox } = spec.preset_config;
+    // The user's own npm cache is outside the sandbox's writable roots, so registry operations
+    // need a shared cache that Codex makes writable (runs pinned before it existed have none).
+    const npmCache = run.config.npm_cache_dir ?? null;
+    if (npmCache) ensureDir(npmCache);
     const common = {
       model, effort, sandbox, lastMessageFile: ap.lastMessage,
       outputSchemaFile: run.config.output_schema ? WORKER_OUTPUT_SCHEMA : null,
       windowsSandbox: run.config.windows_sandbox, projectDocs: run.config.project_docs,
-      shellEnv: { ...BASE_SHELL_ENV, ...(playwrightEnv(run.config.playwright_dir ?? null) ?? {}) },
+      shellEnv: {
+        ...BASE_SHELL_ENV,
+        ...(playwrightEnv(run.config.playwright_dir ?? null) ?? {}),
+        ...(npmCache ? { npm_config_cache: npmCache } : {}),
+      },
+      writableRoots: npmCache ? [npmCache] : [],
     };
     const args = resume
       ? buildResumeArgs({ ...common, sessionId: s.codex_session_id })

@@ -215,7 +215,9 @@ them, minus authority borrowed from the signed-in account. There is one baseline
 | --- | --- |
 | Shell, files, `apply_patch`, images, goals, sub-agents (`collaboration.*`) | Codex defaults, unchanged |
 | Web search and fetch (`web__run`) | Codex default (runs server-side) |
-| Outbound network from shell commands (`node`/`fetch`, browsers; npm registry operations fail because the user's npm cache is outside the sandbox's writable roots) | `sandbox_workspace_write.network_access=true`; commands run as the `CodexSandboxOnline` account. Read-only presets keep Codex's read-only defaults |
+| Outbound network from shell commands (`node`/`fetch`, browsers) | `sandbox_workspace_write.network_access=true`; commands run as the `CodexSandboxOnline` account. Read-only presets keep Codex's read-only defaults |
+| npm registry (`npm install`, `npm view`) | Shared cache at `npm_cache_dir` (default `%SystemDrive%\hw\npm-cache`), passed as a Codex writable root (`sandbox_workspace_write.writable_roots`, so Codex itself grants the sandbox write access) and as `npm_config_cache`. The user's own npm cache is outside the sandbox's writable roots. The runner creates the folder |
+| Git over HTTPS (`ls-remote`, `clone`, `fetch`) | `http.sslBackend=openssl` via `GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_0`/`GIT_CONFIG_VALUE_0` in worker shells; Git for Windows' default Schannel backend fails under the network sandbox account |
 | Browser: navigation, forms, uploads, downloads | Shared Playwright install at `playwright_dir` (default `%SystemDrive%\hw\ms-playwright`: `browsers\` + `node_modules\playwright`), readable by the sandbox accounts. Workers get `PLAYWRIGHT_BROWSERS_PATH` and `NODE_PATH`, so `require('playwright')` works. The user's own `%LOCALAPPDATA%\ms-playwright` is not readable by the sandbox accounts |
 | PowerShell scripts and `.ps1` shims (`npm`, …) | `PSExecutionPolicyPreference=RemoteSigned` (the sandbox accounts default to Restricted; execution policy is not a security boundary) |
 | **Not available:** account connectors and account-installed plugins | `features.apps`, `plugins`, `remote_plugin` = false |
@@ -238,11 +240,11 @@ icacls "%USERPROFILE%\.codex" /deny "CodexSandboxUsers:(OI)(IO)(NP)(RD)"
 
 Revert with `icacls "%USERPROFILE%\.codex" /remove:d CodexSandboxUsers`.
 
-**Windows-native TLS.** Schannel clients (`curl.exe`, `Invoke-WebRequest`, git over HTTPS)
-fail with `SEC_E_NO_CREDENTIALS` under `CodexSandboxOnline`. The likely cause is that Codex never
-created a Windows user profile for that account (`CodexSandboxOffline` has one). This is a known
-compatibility issue, not a blocker: web search, Node `fetch` and Chromium use their own TLS
-and work. Hybrid does not create the profile.
+**Windows-native TLS.** Schannel clients (`curl.exe`, `Invoke-WebRequest`) fail with
+`SEC_E_NO_CREDENTIALS` under `CodexSandboxOnline`. The likely cause is that Codex never created a
+Windows user profile for that account (`CodexSandboxOffline` has one). This is a known
+compatibility issue, not a blocker: web search, Node `fetch`, npm and Chromium use their own TLS,
+and git is switched to OpenSSL. Hybrid does not create the profile.
 
 The disabled features are stable and on by default in Codex 0.160.1. The list lives in
 `WORKER_DISABLED_FEATURES` (`src/codex.mjs`). It was verified by having a real worker enumerate

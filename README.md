@@ -54,7 +54,8 @@ Hybrid is a general-purpose workflow. Every worker gets the normal capabilities 
 harness, with one baseline for all jobs:
 - **Tools:** shell, files, `apply_patch`, web search and fetch, outbound network from shell
   commands, and a real browser (Playwright: navigation, forms, uploads, downloads) through a
-  shared install at `%SystemDrive%\hw\ms-playwright` (`playwright_dir` in `config.json`).
+  shared install at `%SystemDrive%\hw\ms-playwright` (`playwright_dir` in `config.json`), npm
+  with a shared cache at `%SystemDrive%\hw\npm-cache` (`npm_cache_dir`), and git over HTTPS.
 - **Not available:** authority borrowed from the signed-in account. Codex's account connectors
   (`codex_apps`: mail, Drive, Calendar, GitHub, …) and account-installed plugins are disabled.
 
@@ -93,7 +94,7 @@ npm run test:integration # spawns real processes (git, PowerShell CIM, WMI) with
 | Runner and workers survive a full Claude desktop quit (WMI launch) | Acceptance-tested |
 | Two parallel 90+ minute workers with sparse `hybrid wait` wakes | Acceptance-tested (~98 min) |
 | Writes outside the worktree blocked without hanging; no approval prompts | Acceptance-tested; read access is broad |
-| Web search, outbound network (Node `fetch`), Playwright browser with form, upload and download; credential files unreadable | Acceptance-tested |
+| Web search, outbound network (Node `fetch`), npm registry, git over HTTPS, Playwright browser with form, upload and download; credential files unreadable | Acceptance-tested |
 | Worker environment: no `OPENAI_*`/`CLAUDE*`, no `codex`/`claude` on `PATH` | Acceptance-tested |
 | Patch rules: hooks, symlinks/junctions, protected paths, write scope | Acceptance-tested |
 | Cancel of a real cross-user process tree, no orphans, patch captured | Acceptance-tested |
@@ -106,10 +107,8 @@ npm run test:integration # spawns real processes (git, PowerShell CIM, WMI) with
 | Sleep | Not tested. Run on AC with system sleep disabled; there is no keep-awake in Hybrid |
 
 Known gaps:
-- Windows-native TLS clients (`curl.exe`, `Invoke-WebRequest`, git over HTTPS) can fail inside
-  Codex's network sandbox account. See docs/ARCHITECTURE.md §9.
-- npm runs, but registry operations (`npm install`, `npm view`) fail: the user's npm cache is
-  outside the sandbox's writable roots.
+- Windows-native TLS clients (`curl.exe`, `Invoke-WebRequest`) fail inside Codex's network
+  sandbox account. See docs/ARCHITECTURE.md §9.
 - `apply_patch` can fail with "Failed to write file" in a folder a shell command created.
   Workers fall back to shell writes, and patch capture is unaffected.
 

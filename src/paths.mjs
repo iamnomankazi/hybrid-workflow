@@ -27,6 +27,12 @@ export function defaultPlaywrightDir(env = process.env) {
   return path.join(`${drive}\\`, 'hw', 'ms-playwright');
 }
 
+// Shared npm cache workers may write (a Codex writable root): %SystemDrive%\hw\npm-cache.
+export function defaultNpmCacheDir(env = process.env) {
+  const drive = env.SystemDrive || env.SYSTEMDRIVE || 'C:';
+  return path.join(`${drive}\\`, 'hw', 'npm-cache');
+}
+
 export function homePaths(home) {
   return {
     home,
