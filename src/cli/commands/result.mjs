@@ -42,9 +42,20 @@ function patchLines(patch, patchFile, full) {
   return lines;
 }
 
-function provenanceLines(p) {
+// Anything that reached the worker beyond the task and the sandboxed shell.
+export function isolationWarnings(res) {
+  const iso = res.provenance?.observed_isolation;
+  const out = [];
+  if (res.events?.mcp_tool_calls > 0) out.push(`${res.events.mcp_tool_calls} MCP tool call(s)`);
+  if (iso?.apps_present) out.push('codex_apps MCP exposed');
+  if (iso?.skills_catalog_present) out.push('skills catalog present');
+  return out;
+}
+
+function provenanceLines(p, warnings) {
   if (!p) return [];
   const lines = [];
+  if (warnings.length) lines.push(`WARNING isolation: ${warnings.join('; ')}`);
   if (p.requested) lines.push(`requested: ${p.requested.model} ${p.requested.effort} ${p.requested.sandbox} approval=${p.requested.approval_policy}`);
   if (p.observed) {
     const o = p.observed;
@@ -87,12 +98,12 @@ export const result = {
       `exit: code=${res.exit?.code ?? '-'} signal=${res.exit?.signal ?? '-'} source=${res.exit?.source ?? '-'}`,
       ...reportLines(res.worker_report, full),
       ...patchLines(res.patch, patchFile, full),
-      ...provenanceLines(res.provenance),
+      ...provenanceLines(res.provenance, isolationWarnings(res)),
       `times: queued=${t.queued_at ?? '-'} started=${t.started_at ?? '-'} ended=${t.ended_at ?? '-'}`,
       ...(decision ? [`decision: ${decision.decision}${decision.note ? ` - ${decision.note}` : ''}`] : []),
     ];
     return {
-      data: { ...res, decision: decision ?? null, patch_path: patchFile },
+      data: { ...res, decision: decision ?? null, patch_path: patchFile, isolation_warnings: isolationWarnings(res) },
       text: lines.join('\n'),
     };
   },

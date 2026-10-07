@@ -89,13 +89,13 @@ test('readObservedIsolation detects the skills catalog and JSON-escaped global i
       JSON.stringify({ type: 'response_item', payload: { role: 'user', content: [{ text: `intro\n${probe}\n` }] } }),
     ].join('\n') + '\n');
     assert.deepEqual(readObservedIsolation(rollout, { globalProbes: [probe] }),
-      { skills_catalog_present: true, global_instructions_present: true });
+      { skills_catalog_present: true, apps_present: false, global_instructions_present: true });
     assert.deepEqual(readObservedIsolation(rollout, { globalProbes: ['text that is not in the rollout at all'] }),
-      { skills_catalog_present: true, global_instructions_present: false });
+      { skills_catalog_present: true, apps_present: false, global_instructions_present: false });
     assert.deepEqual(readObservedIsolation(rollout, { globalProbes: [] }),
-      { skills_catalog_present: true, global_instructions_present: false });
+      { skills_catalog_present: true, apps_present: false, global_instructions_present: false });
     assert.deepEqual(readObservedIsolation(rollout),
-      { skills_catalog_present: true, global_instructions_present: null }, 'unknown when no probes are available');
+      { skills_catalog_present: true, apps_present: false, global_instructions_present: null }, 'unknown when no probes are available');
     assert.equal(readObservedIsolation(path.join(home, 'missing.jsonl')), null);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });

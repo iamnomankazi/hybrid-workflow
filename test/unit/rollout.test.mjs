@@ -132,6 +132,28 @@ test('records beyond the first 4 MB of a rollout are read (long or resumed sessi
   }
 });
 
+test('readObservedIsolation reports codex_apps tools or calls, not base-instruction prose', () => {
+  const home = tmp();
+  try {
+    const prose = { type: 'session_meta', payload: { id: THREAD, base_instructions: { text: 'An app is a set of MCP tools within the `codex_apps` MCP.' } } };
+    const declared = writeRollout(home, new Date(), [
+      prose,
+      { type: 'turn_context', payload: ctx },
+      { type: 'response_item', payload: { type: 'custom_tool_call_output', output: '{"name":"mcp__codex_apps__codexless_codex_command_exec"}' } },
+    ]);
+    assert.equal(readObservedIsolation(declared).apps_present, true);
+    const called = writeRollout(home, new Date(), [
+      prose,
+      { type: 'event_msg', payload: { type: 'item_completed', item: { type: 'McpToolCall', server: 'codex_apps', tool: 'x' } } },
+    ], 'bbbbbbbb-bbbb-cccc-dddd-eeeeeeeeeeee');
+    assert.equal(readObservedIsolation(called).apps_present, true);
+    const proseOnly = writeRollout(home, new Date(), [prose, { type: 'turn_context', payload: ctx }], 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
+    assert.equal(readObservedIsolation(proseOnly).apps_present, false, 'base-instruction prose is not exposure');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('readObservedConfig handles missing turn_context, no meta, and missing file', () => {
   const home = tmp();
   try {

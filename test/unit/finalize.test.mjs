@@ -159,7 +159,7 @@ test('observedBlock compares the rollout to the request and tolerates a missing 
     assert.equal(ok.matches, true);
     assert.equal(ok.observed.model, 'm1');
     assert.equal(ok.observed.sandbox_policy, 'workspace-write');
-    assert.deepEqual(ok.isolation, { skills_catalog_present: false, global_instructions_present: null });
+    assert.deepEqual(ok.isolation, { skills_catalog_present: false, apps_present: false, global_instructions_present: null });
 
     const bad = observedBlock({ codexHome: home, threadId: thread, requested: { ...requested, effort: 'low' } });
     assert.equal(bad.matches, false);

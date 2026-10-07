@@ -54,7 +54,10 @@ model, reasoning effort, sandbox (`read-only` or `workspace-write` only),
 `approval_policy="never"` and `shell_environment_policy.inherit="core"`, an allowlisted
 environment (no `OPENAI_*`, `ANTHROPIC_*`, `CLAUDE*`, `CODEX_*`, proxies) and a curated `PATH`
 without any `codex`/`claude` executables. Project `AGENTS.md` files and the user's Codex skills
-catalog are suppressed. The user's `config.toml` is never loaded, and nothing in `CODEX_HOME` is
+catalog are suppressed. Codex features that add tools outside the sandboxed shell are disabled:
+account apps (`codex_apps` MCP), plugins, web access, image generation and goals. Codex's
+collaboration (sub-agent) tools have no verified switch yet and remain exposed.
+The user's `config.toml` is never loaded, and nothing in `CODEX_HOME` is
 ever modified (Hybrid only hashes the global instructions file, below).
 
 **Known limitation:** Codex 0.160.1 always injects `CODEX_HOME/AGENTS.md` (or

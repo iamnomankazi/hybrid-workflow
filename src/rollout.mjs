@@ -134,8 +134,9 @@ export function readObservedConfig(file, { since = null } = {}) {
   };
 }
 
-// What reached the model besides the task: Codex's skills catalog block, and (when probes for
-// the pinned global instructions file are available) that file's text. Presence only. The
+// What reached the model besides the task: Codex's skills catalog block, the `codex_apps` MCP
+// server (apps instructions or tools), and (when probes for the pinned global instructions file
+// are available) that file's text. Presence only. The
 // whole session counts: instruction messages are recorded once at session start but remain in
 // the model's context for every resumed attempt.
 export function readObservedIsolation(file, { globalProbes = null } = {}) {
@@ -147,6 +148,9 @@ export function readObservedIsolation(file, { globalProbes = null } = {}) {
   }
   return {
     skills_catalog_present: text.includes('<skills_instructions>'),
+    // Tool names or call items only: Codex's base instructions mention `codex_apps` in prose
+    // even when the feature is disabled.
+    apps_present: text.includes('mcp__codex_apps__') || text.includes('"server":"codex_apps"'),
     global_instructions_present: globalProbes === null
       ? null
       : globalProbes.length > 0 && globalProbes.some((probe) => text.includes(JSON.stringify(probe).slice(1, -1))),

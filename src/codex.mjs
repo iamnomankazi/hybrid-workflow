@@ -72,6 +72,17 @@ function commonConfigArgs({ model, effort }) {
   ];
 }
 
+// Features on by default in Codex 0.160.1 that give a worker tools running outside its sandboxed
+// shell, none of which --ignore-user-config removes (verified from a worker's own tool table):
+// apps → the account's `codex_apps` MCP (incl. a command_exec with inherited access);
+// plugins/remote_plugin → plugin MCP servers (e.g. `codex_security`); image_generation →
+// image_gen; goals → goal tools. Web access (`web__run`) is a config key, not a feature.
+// Not listed: multi_agent/multi_agent_v2=false left the `collaboration.*` tools (spawn_agent, …)
+// in the tool table, so no verified switch for them exists yet.
+export const WORKER_DISABLED_FEATURES = Object.freeze([
+  'apps', 'plugins', 'remote_plugin', 'image_generation', 'goals',
+]);
+
 // --ignore-user-config does not stop Codex from injecting the user's skills catalog from
 // CODEX_HOME; skills.include_instructions=false does (verified against 0.160.1 rollouts).
 function tailConfigArgs({ windowsSandbox, projectDocs }) {
@@ -81,6 +92,8 @@ function tailConfigArgs({ windowsSandbox, projectDocs }) {
     '-c', `windows.sandbox="${windowsSandbox}"`,
     ...(projectDocs ? [] : ['-c', 'project_doc_max_bytes=0']),
     '-c', 'skills.include_instructions=false',
+    '-c', 'web_search="disabled"',
+    ...WORKER_DISABLED_FEATURES.flatMap((f) => ['-c', `features.${f}=false`]),
   ];
 }
 

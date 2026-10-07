@@ -101,6 +101,9 @@ timeout (exit 10; just wait again). Target 10–15 wakes per 5-hour run.
 | `paused_auth` | Launch hold is set. Human re-authenticates Codex; `run unhold`; resume |
 | `rejected` | Fix the spec (stale epoch or validation error) |
 
+Any result showing `WARNING isolation:` (MCP tool calls, `codex_apps`, skills catalog) means the
+worker had reach beyond its task and sandboxed shell. Do not integrate it; tell the human.
+
 ## Integrating a patch
 
 Opus integrates on an integration branch in its own worktree; workers never commit.
