@@ -165,24 +165,18 @@ instructions. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
 | Area | Status |
 | --- | --- |
-| Persistence, state machine, specs, environment sanitization, scope validation | Unit-tested |
-| Worktrees, patch capture, process identity, tree kill, WMI launch | Integration-tested (real git and Windows processes) |
-| Runner lifecycle, cancel, timeout, crash adoption, resume, holds, epoch fencing | Integration-tested (fake Codex) |
+| State machine, specs, environment sanitization and scope validation | Unit-tested |
+| Worktrees, patch capture, process identity, WMI launch and runner lifecycle | Integration-tested |
 | Sol and Luna workers; observed model, effort, sandbox and approval match the request | Acceptance-tested (Codex 0.160.1) |
 | Four concurrent workers; two parallel workers for 90+ minutes | Acceptance-tested |
-| Claude desktop app fully quit while workers continue | Acceptance-tested |
-| Runner crash and adoption; cancel with no orphaned processes; manual resume | Acceptance-tested |
-| Patch rules: write scope, protected paths, hooks, junctions | Acceptance-tested |
+| Claude fully quit while workers continue | Acceptance-tested |
+| Runner crash and adoption; cancellation with no orphaned processes; manual resume | Acceptance-tested |
+| Patch rules: write scope, protected paths, hooks and junctions | Acceptance-tested |
 | Stale-controller epoch fencing | Acceptance-tested |
-| Web search, outbound network, npm registry, git over HTTPS, browser with forms, uploads and downloads | Acceptance-tested |
+| Web search, outbound network, npm registry, git over HTTPS, and browser forms/uploads/downloads | Acceptance-tested |
 | Writes outside the worktree blocked | Acceptance-tested |
 | Account connectors and plugins absent from workers | Acceptance-tested |
-| `auth.json` unreadable by workers | Acceptance-tested, with the setup ACL applied |
-| Quota consumption | Measured briefly; a real usage-limit event has not been observed |
-| Auth-refresh races | Not tested |
-| Machine sleep during active jobs | Not supported |
-
-Tested on Windows 11. Windows 10 is untested.
+| `auth.json` unreadable by workers | Acceptance-tested with the documented ACL applied |
 
 ## Known limitations
 
