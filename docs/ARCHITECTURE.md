@@ -14,6 +14,8 @@ fix deliberately, never silently.
 | Runner (one per run, temporary) | Codex lifecycle: queue, worktrees, launch, monitor, cancel, capture, record | LLM calls; interpret `plan.md`; merge; commit; push; auto-relaunch uncertain work |
 | Job host (one per attempt) | Owns exactly one `codex.exe` process and records its identity and exit | Anything else |
 | Codex worker (`codex exec`) | Executes one capsule in an isolated worktree | Commit, merge, push, touch protected paths |
+| Temporary controller (Sol, `hybrid controller start`) | Stands in for Opus through a normal takeover: same contract, CLI, `plan.md` and integration worktree (§6) | Merge to main, push, close the run, change the goal; launch the runner or Codex |
+| Controller host (one per controller) | Runs the controller's `codex.exe` as the user, keeps the runner alive, stops the controller when another session takes over | Anything else |
 
 ## 2. Process lifecycle (Windows)
 
@@ -22,11 +24,15 @@ Opus ── hybrid run start / submit / cancel / resume ──▶ CLI
 CLI ── WMI Win32_Process.Create (DETACHED_PROCESS, SW_HIDE) ──▶ node runner/main.mjs   (parent: WmiPrvSE)
 runner ── spawn(detached, windowsHide) ──▶ node runner/job-host.mjs   (one per attempt)
 job host ── spawn(non-detached, windowsHide, stdio=files) ──▶ codex.exe exec ...
+CLI (controller start) ── WMI ──▶ node runner/controller-host.mjs ── spawn(non-detached) ──▶ codex.exe exec (controller)
 ```
 
 * There is no daemon, service, scheduled task, login item, pipe or HTTP server.
 * One run = at most one runner. The runner exits after `runner_idle_exit_minutes` with no
-  queued/active jobs and no pending requests. Any mutating CLI command relaunches it on demand.
+  queued/active jobs, no pending requests and no attached controller (`controller.json`
+  starting/running with a fresh heartbeat). Any mutating CLI command relaunches it on demand,
+  except from a controller's sandboxed shell (`HYBRID_RUNNER_LAUNCH=none`), where the
+  controller host relaunches it instead.
 * WMI is the launch mechanism because Test 2 proved ordinary detachment dies with Claude
   Desktop and WMI-created processes survive a full tray Quit.
 * **Why the job host exists.** Node (libuv) places every *non-detached* child in a
@@ -58,6 +64,12 @@ runs/<run_id>/
   inbox/<id>.json                pending requests                                 CLI
   inbox/done/<id>.json           processed requests + outcome                     runner
   cursors/<session>.json         per-session status --changed cursor             CLI
+  controller.json                last temporary controller: status, heartbeat     CLI (start) / controller host
+  controllers/<n>/
+    launch.json, prompt.md       exact controller argv, writable roots, prompt    CLI
+    controller.json, host.log    copy of the record; host log                     controller host
+    events.jsonl, stderr.txt     controller's Codex stdout (--json) / stderr      codex (via host)
+    last-message.md              controller's final message                       codex
   jobs/<job_id>/
     spec.json, capsule.md        immutable inputs (write-once)                    CLI
     decision.json                Opus integration decision                        CLI (for Opus)
@@ -147,6 +159,44 @@ Exit code alone never makes a job `completed`.
 * Read-only commands (`status`, `wait`, `result`) need no epoch; any session may observe.
 * The fence protects against accidental stale controllers (an old session waking up), not
   against an adversary with filesystem access.
+
+### Temporary controller
+
+`hybrid controller start --epoch N` hands the run to a trusted Sol session (`gpt-6.1-sol`,
+`xhigh`) without new state: the controller reads `plan.md`, runs `hybrid takeover` (epoch N+1)
+and follows docs/ORCHESTRATION.md like Opus. Opus returns with `hybrid takeover` (N+2), which
+fences the controller; the controller host then stops its process tree.
+
+* **Sandbox.** The controller is not a worker but is not unrestricted either: Codex's elevated
+  `workspace-write` sandbox, `approval_policy="never"`, network on, account connectors and
+  plugins off, no `danger-full-access` or bypass flags (`buildControllerArgs` refuses them).
+  Writable roots: the run directory (its cwd, which should also hold the integration
+  worktree), the repository's git directory, and any `--writable` integration worktree, which
+  may not be a drive root, the profile, or a directory containing the repository or Hybrid home.
+  Its shell runs as `CodexSandboxOnline`.
+* **Runner availability.** The sandbox account cannot create processes through WMI
+  (`Win32_Process.Create` → access denied, observed 2026-10-07), so it cannot relaunch the
+  runner. The controller's shell gets `HYBRID_RUNNER_LAUNCH=none`; the controller host, running
+  as the user, heartbeats `controller.json` (the runner does not idle out while it is fresh)
+  and re-ensures the runner every keepalive interval (30 s). The sandbox account is also denied
+  *reading* the process list (`Get-CimInstance Win32_Process`, observed 2026-10-08), so when
+  that query fails the CLI judges runner liveness from the runner's own evidence: the locked
+  pid still exists (`process.kill(pid, 0)`) and `runner.json` names it, `running`, with a
+  heartbeat under 60 s old (`runnerAlive`, `src/launcher.mjs`).
+* **Git.** The controller's shell gets `safe.directory` for its writable roots through git's
+  environment config (`GIT_CONFIG_*`), since the repository is owned by the user. Global git
+  config is untouched.
+* **Handback.** The host stops the controller when the run closes or the owner epoch moves past
+  the start epoch to a different session.
+* **Waiting.** The controller runs `hybrid wait` as a long-running shell command in its own
+  session; Codex returns control about every 50 s and the controller re-attaches, so a wait
+  costs roughly one short, mostly cached model turn per minute (8-minute wait observed
+  2026-10-08: 9 turns, ~350k input tokens of which 98.6 % cached, ~2k output). No external
+  wait/resume driver is needed.
+* **ACLs.** Codex's sandbox setup permanently adds write ACEs for `CodexSandboxUsers` and a
+  per-workspace capability SID to each writable root (as it does for worker worktrees). A
+  different sandboxed session, e.g. a worker, still cannot write there: writes need that
+  session's capability SID (probe verified 2026-10-08). Hybrid does not remove them.
 
 ## 7. Requests (inbox)
 
@@ -402,5 +452,6 @@ Nothing is ever relaunched automatically. After a reboot every in-flight job bec
 | `src/wmi.mjs` | headless WMI launcher |
 | `src/git.mjs` | git wrapper, worktrees, preparation, patch capture |
 | `src/scope.mjs` | protected paths, write scope, symlink/reparse validation |
-| `src/runner/*` | runner main loop, job host, finalize |
+| `src/controller.mjs` | temporary controller profile, argv, writable roots, prompt |
+| `src/runner/*` | runner main loop, job host, controller host, finalize |
 | `src/cli/*`, `bin/hybrid.mjs` | commands |

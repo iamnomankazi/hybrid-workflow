@@ -6,6 +6,9 @@ import { fileURLToPath } from 'node:url';
 export const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const RUNNER_ENTRY = path.join(PACKAGE_ROOT, 'src', 'runner', 'main.mjs');
 export const JOB_HOST_ENTRY = path.join(PACKAGE_ROOT, 'src', 'runner', 'job-host.mjs');
+export const CONTROLLER_HOST_ENTRY = path.join(PACKAGE_ROOT, 'src', 'runner', 'controller-host.mjs');
+export const CLI_ENTRY = path.join(PACKAGE_ROOT, 'bin', 'hybrid.mjs');
+export const ORCHESTRATION_DOC = path.join(PACKAGE_ROOT, 'docs', 'ORCHESTRATION.md');
 export const WORKER_OUTPUT_SCHEMA = path.join(PACKAGE_ROOT, 'schemas', 'worker-output.schema.json');
 
 // State root: HYBRID_HOME, else %LOCALAPPDATA%\HybridWorkflow.
@@ -61,6 +64,8 @@ export function runPaths(home, runId) {
     inboxDone: path.join(dir, 'inbox', 'done'),
     cursors: path.join(dir, 'cursors'),
     jobs: path.join(dir, 'jobs'),
+    controller: path.join(dir, 'controller.json'),
+    controllers: path.join(dir, 'controllers'),
   };
 }
 

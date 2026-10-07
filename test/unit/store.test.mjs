@@ -136,6 +136,8 @@ describe('paths', () => {
       inboxDone: path.join(dir, 'inbox', 'done'),
       cursors: path.join(dir, 'cursors'),
       jobs: path.join(dir, 'jobs'),
+      controller: path.join(dir, 'controller.json'),
+      controllers: path.join(dir, 'controllers'),
     });
   });
 

@@ -154,6 +154,12 @@ instructions. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - **The runner can crash.** Workers keep running under their job hosts. A restarted runner
   adopts a worker only if PID and process start time both match; anything uncertain becomes
   `interrupted`. Nothing is resumed automatically.
+- **Opus can hand off.** When Claude's window runs low with work remaining, Opus reaches a clean
+  boundary, updates `plan.md` and runs `hybrid controller start`. A temporary Sol (`xhigh`)
+  controller takes over the run through the normal epoch takeover and continues under the same
+  contract, in a workspace-write sandbox limited to the run, the repository's git directory and
+  the integration worktree. Opus later takes it back the same way. See
+  [docs/ORCHESTRATION.md](docs/ORCHESTRATION.md) "Controller handoff".
 - **Stale controllers are fenced.** Every mutating command carries the run's epoch, checked by
   the CLI and again by the runner. `hybrid takeover` increments the epoch, after which commands
   carrying the previous epoch are rejected. This guards against an old session acting on stale

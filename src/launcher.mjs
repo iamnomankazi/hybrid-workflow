@@ -23,12 +23,37 @@ function readLoose(file) {
   }
 }
 
-export async function runnerAlive(home, runId) {
+// Used when the process query is not allowed: a temporary controller's sandbox account is denied
+// Get-CimInstance Win32_Process (0x80041003, observed 2026-10-08). The runner rewrites runner.json
+// every heartbeat_ms (default 10 s), so a fresh "running" heartbeat from the locked pid, whose
+// process still exists, is the runner's own evidence of life.
+export const HEARTBEAT_FALLBACK_MS = 60_000;
+
+function pidExists(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    return err.code !== 'ESRCH'; // EPERM: exists, owned by another account
+  }
+}
+
+export function aliveByHeartbeat(lock, runner, nowMs = Date.now()) {
+  if (!lock || !runner || runner.pid !== lock.pid || runner.status !== 'running') return false;
+  const beat = Date.parse(runner.heartbeat_at ?? '');
+  return Number.isFinite(beat) && nowMs - beat < HEARTBEAT_FALLBACK_MS && pidExists(lock.pid);
+}
+
+export async function runnerAlive(home, runId, { query = isAlive } = {}) {
   const rp = runPaths(home, runId);
   const lock = readLoose(rp.runnerLock);
   const runner = readLoose(rp.runner);
-  const alive = !!lock && await isAlive({ pid: lock.pid, start_time: lock.start_time });
-  return { alive, lock, runner };
+  if (!lock) return { alive: false, lock, runner };
+  try {
+    return { alive: await query({ pid: lock.pid, start_time: lock.start_time }), lock, runner };
+  } catch {
+    return { alive: aliveByHeartbeat(lock, runner), lock, runner, via: 'heartbeat' };
+  }
 }
 
 function logTail(file) {
@@ -50,23 +75,34 @@ function launchSpawn(argv, cwd) {
   };
 }
 
-export async function ensureRunner(home, runId, env = process.env) {
-  const current = await runnerAlive(home, runId);
-  if (current.alive) return { already: true, pid: current.lock.pid };
+// Starts `node <argv>` detached from the caller: through WMI (so it survives the caller's job
+// object, e.g. a Claude Code session) or, for tests, a plain detached spawn.
+export function launchNode(mode, argv, cwd) {
+  return mode === 'wmi'
+    ? launchDetachedViaWmi({ exe: process.execPath, args: argv, cwd })
+    : launchSpawn(argv, cwd);
+}
 
+export function launchMode(env = process.env) {
   const mode = env.HYBRID_RUNNER_LAUNCH ?? 'wmi';
   if (!LAUNCH_MODES.includes(mode)) {
     throw new HybridError(`HYBRID_RUNNER_LAUNCH must be one of ${LAUNCH_MODES.join(', ')}`, EXIT.usage, 'usage');
   }
+  return mode;
+}
+
+export async function ensureRunner(home, runId, env = process.env) {
+  const current = await runnerAlive(home, runId);
+  if (current.alive) return { already: true, pid: current.lock.pid };
+
+  const mode = launchMode(env);
   if (mode === 'none') return { already: false, pid: null, skipped: true };
 
   const rp = runPaths(home, runId);
   const argv = [RUNNER_ENTRY, '--home', home, '--run', runId];
   let launched;
   try {
-    launched = mode === 'wmi'
-      ? await launchDetachedViaWmi({ exe: process.execPath, args: argv, cwd: rp.dir })
-      : launchSpawn(argv, rp.dir);
+    launched = await launchNode(mode, argv, rp.dir);
   } catch (err) {
     throw new HybridError(`Could not launch the runner (${mode}): ${err.message}`, EXIT.error, 'launch_failed');
   }

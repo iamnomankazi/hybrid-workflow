@@ -17,6 +17,7 @@ import { wait } from './commands/wait.mjs';
 import { result } from './commands/result.mjs';
 import { cancel, resume, decide } from './commands/jobctl.mjs';
 import { gc } from './commands/gc.mjs';
+import { controllerStart } from './commands/controller.mjs';
 
 const COMMANDS = {
   'repo add': repoAdd,
@@ -36,6 +37,7 @@ const COMMANDS = {
   resume,
   decide,
   gc,
+  'controller start': controllerStart,
 };
 
 const COMMON_OPTIONS = {
@@ -45,7 +47,7 @@ const COMMON_OPTIONS = {
   help: { type: 'boolean' },
 };
 
-const GROUPS = new Set(['repo', 'run']);
+const GROUPS = new Set(['repo', 'run', 'controller']);
 
 function usageText() {
   return `usage: hybrid <command> [options]\n${Object.values(COMMANDS).map((c) => `  ${c.usage}`).join('\n')}\n`

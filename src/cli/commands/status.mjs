@@ -1,6 +1,8 @@
 import { TERMINAL_STATES } from '../../constants.mjs';
 import * as store from '../../store.mjs';
 import { runnerAlive } from '../../launcher.mjs';
+import { runPaths } from '../../paths.mjs';
+import { controllerAttached, readController } from '../../controller.mjs';
 import {
   ageSince, fmtDuration, parseSeq, readCursor, requireJob, requirePositionals, selectRun, usageError, workSummary, writeCursor,
 } from '../util.mjs';
@@ -62,6 +64,23 @@ function runnerSummary(live, now) {
   };
 }
 
+// The last temporary controller (hybrid controller start), if any.
+function controllerSummary(file, now) {
+  const rec = readController(file);
+  if (!rec) return null;
+  return {
+    session_id: rec.session_id, status: rec.status, attached: controllerAttached(rec, now),
+    start_epoch: rec.start_epoch, host_pid: rec.host?.pid ?? null, thread_id: rec.thread_id,
+    started_at: rec.started_at, ended_at: rec.ended_at, stop_reason: rec.stop_reason, dir: rec.dir,
+  };
+}
+
+function controllerText(k) {
+  if (k.attached) return `${k.session_id} running (host pid ${k.host_pid}, launched at epoch ${k.start_epoch})`;
+  const end = k.status === 'running' ? 'not responding' : `${k.status}${k.stop_reason ? ` (${k.stop_reason})` : ''}`;
+  return `${k.session_id} ${end}${k.ended_at ? ` at ${k.ended_at}` : ''}`;
+}
+
 function runnerText(r) {
   if (!r.alive) return `not running${r.status ? ` (last status ${r.status})` : ''}`;
   const hold = r.hold ? ` hold=${r.hold.reason}` : '';
@@ -72,6 +91,7 @@ async function runSummary(c, runId, run) {
   const now = Date.now();
   const work = workSummary(c.home, runId);
   const runner = runnerSummary(await runnerAlive(c.home, runId), now);
+  const controller = controllerSummary(runPaths(c.home, runId).controller, now);
   const jobs = work.jobs.map((j) => jobSummary(c.home, runId, j, now));
   const text = [
     `run: ${runId} ${run.status}`,
@@ -79,13 +99,14 @@ async function runSummary(c, runId, run) {
     `base: ${run.base_commit.slice(0, 12)}`,
     `repo: ${run.repo.alias}`,
     `runner: ${runnerText(runner)}`,
+    ...(controller ? [`controller: ${controllerText(controller)}`] : []),
     `counts: ${Object.entries(work.counts).map(([k, v]) => `${k}=${v}`).join(' ') || 'none'}`,
     ...jobs.map(jobLine),
   ].join('\n');
   return {
     data: {
       run_id: runId, status: run.status, owner: run.owner, base_commit: run.base_commit, repo: run.repo.alias,
-      runner, counts: work.counts, jobs,
+      runner, controller, counts: work.counts, jobs,
     },
     text,
   };

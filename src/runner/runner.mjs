@@ -24,6 +24,7 @@ import { areAlive, getIdentity, isAlive, killTree, ownIdentity, sweepOrphans } f
 import { buildResult, collectEvidence, decideOutcome, specSha256 } from './finalize.mjs';
 import { defaultCodexHome } from '../rollout.mjs';
 import { describeGlobalInstructions, readGlobalInstructions } from '../instructions.mjs';
+import { controllerAttached, readController } from '../controller.mjs';
 
 const LAUNCH_WAIT_MS = 20_000;
 const RECONCILE_LAUNCH_WAIT_MS = 10_000;
@@ -303,7 +304,9 @@ export class Runner {
     // Queued jobs under a launch hold cannot progress until an owner unholds (which relaunches
     // the runner), so they do not keep this process alive.
     const launchable = this.hold ? 0 : c.queued;
-    if (launchable > 0 || c.active > 0 || listPendingRequests(this.home, this.runId).length > 0) {
+    // A temporary controller (hybrid controller start) depends on this runner and cannot relaunch it.
+    if (launchable > 0 || c.active > 0 || listPendingRequests(this.home, this.runId).length > 0
+      || controllerAttached(readController(this.rp.controller))) {
       this.idleSinceMs = null;
       return;
     }

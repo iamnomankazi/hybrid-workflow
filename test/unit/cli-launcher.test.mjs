@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { ensureRunner, runnerAlive } from '../../src/launcher.mjs';
+import { HEARTBEAT_FALLBACK_MS, aliveByHeartbeat, ensureRunner, runnerAlive } from '../../src/launcher.mjs';
 import { runPaths } from '../../src/paths.mjs';
 import { writeJsonAtomic } from '../../src/fsutil.mjs';
 import { ownIdentity } from '../../src/proc.mjs';
@@ -22,6 +22,38 @@ before(() => {
 after(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 describe('launcher', () => {
+  test('a denied process query falls back to the runner heartbeat', async () => {
+    const lock = { pid: process.pid, start_time: 'x', acquired_at: new Date().toISOString() };
+    writeJsonAtomic(rp.runnerLock, lock);
+    const denied = async () => { throw new Error('Get-CimInstance : Access denied'); };
+    try {
+      writeJsonAtomic(rp.runner, { pid: process.pid, status: 'running', heartbeat_at: new Date().toISOString() });
+      const fresh = await runnerAlive(tmp, RUN_ID, { query: denied });
+      assert.deepEqual([fresh.alive, fresh.via], [true, 'heartbeat']);
+      writeJsonAtomic(rp.runner, { pid: process.pid, status: 'running', heartbeat_at: new Date(Date.now() - HEARTBEAT_FALLBACK_MS).toISOString() });
+      assert.equal((await runnerAlive(tmp, RUN_ID, { query: denied })).alive, false);
+      // The query wins when it works.
+      writeJsonAtomic(rp.runner, { pid: process.pid, status: 'running', heartbeat_at: new Date().toISOString() });
+      assert.equal((await runnerAlive(tmp, RUN_ID, { query: async () => false })).alive, false);
+    } finally {
+      fs.rmSync(rp.runnerLock, { force: true });
+      fs.rmSync(rp.runner, { force: true });
+    }
+  });
+
+  test('aliveByHeartbeat needs the locked pid, running status, a fresh beat and a live process', () => {
+    const now = Date.now();
+    const lock = { pid: process.pid };
+    const beat = new Date(now - 1000).toISOString();
+    assert.equal(aliveByHeartbeat(lock, { pid: process.pid, status: 'running', heartbeat_at: beat }, now), true);
+    assert.equal(aliveByHeartbeat(lock, { pid: process.pid + 1, status: 'running', heartbeat_at: beat }, now), false);
+    assert.equal(aliveByHeartbeat(lock, { pid: process.pid, status: 'exited', heartbeat_at: beat }, now), false);
+    assert.equal(aliveByHeartbeat(null, { pid: process.pid, status: 'running', heartbeat_at: beat }, now), false);
+    // A pid that no longer exists (ESRCH) is dead whatever runner.json says.
+    const gone = { pid: 4_000_000 };
+    assert.equal(aliveByHeartbeat(gone, { pid: gone.pid, status: 'running', heartbeat_at: beat }, now), false);
+  });
+
   test('no runner.lock means not alive', async () => {
     const r = await runnerAlive(tmp, RUN_ID);
     assert.equal(r.alive, false);

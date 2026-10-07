@@ -16,6 +16,8 @@ export const SCHEMAS = Object.freeze({
   launch: 'hybrid.launch/1',
   host: 'hybrid.host/1',
   exit: 'hybrid.exit/1',
+  controller: 'hybrid.controller/1',
+  controllerLaunch: 'hybrid.controller-launch/1',
   machineConfig: 'hybrid.config/1',
 });
 
