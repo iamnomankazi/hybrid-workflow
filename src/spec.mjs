@@ -218,8 +218,20 @@ function rulesBlock(spec, jobId) {
   } else {
     lines.push('  - (none)');
   }
+  // Matches the worker baseline in src/codex.mjs: web search for every job; shell network
+  // (sandbox_workspace_write.network_access) only applies to workspace-write jobs.
+  if (spec.preset_config.sandbox === 'read-only') {
+    lines.push('- Web search is available. Shell commands may have no network access in this read-only job.');
+  } else {
+    lines.push(
+      '- You have network access: web search, and outbound HTTP(S) from shell commands (e.g. Node fetch, npm,'
+      + ' git over HTTPS). Windows-native HTTPS clients (curl.exe, Invoke-WebRequest, Invoke-RestMethod) fail'
+      + ' here; use Node or the other tools instead. If a shared Playwright install is configured,'
+      + ' require(\'playwright\') works.',
+      '- Install packages only when the task needs them, and only locally in this worktree (no global installs).',
+    );
+  }
   lines.push(
-    '- No network is available. Do not install packages.',
     '- Do not launch other AI agents or CLIs (codex, claude).',
     '- Your final reply must be ONLY a JSON object matching the provided output schema'
     + ` (job_id, status, summary, files_changed, tests, notes), with job_id set to exactly "${jobId}".`

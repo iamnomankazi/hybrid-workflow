@@ -153,11 +153,12 @@ test('composePrompt is deterministic and includes header, scope, rules and capsu
   assert.equal(a, composePrompt(args));
   for (const needle of [
     'job_id: job-1', 'run_id: r261006-120000-abcd', 'b'.repeat(40), 'sol-high-impl',
-    '  - src', '  - docs/a.md', '  - AGENTS.md', 'git commit', 'No network', 'codex, claude',
+    '  - src', '  - docs/a.md', '  - AGENTS.md', 'git commit', 'You have network access', 'Invoke-WebRequest', 'no global installs', 'codex, claude',
     'job_id set to exactly "job-1"', '## Task capsule',
   ]) {
     assert.ok(a.includes(needle), needle);
   }
+  assert.ok(!a.includes('No network'), 'the stale no-network rule is gone');
   assert.ok(a.endsWith('## Goal\nDo it.\n\n'));
   assert.ok(!/\d{4}-\d{2}-\d{2}T/.test(a));
 });
@@ -168,6 +169,9 @@ test('composePrompt for read-only says modify nothing and shows no scope', () =>
   assert.ok(p.includes('modify nothing'));
   assert.ok(!p.includes('write scope'));
   assert.ok(p.includes('(none)'));
+  assert.ok(p.includes('Web search is available'), 'read-only jobs are told only about web search');
+  assert.ok(!p.includes('You have network access') && !p.includes('Install packages'));
+  assert.ok(p.includes('codex, claude'), 'the no-other-agents rule applies to every job');
 });
 
 test('composeResumePrompt repeats the rules and includes reason and note', () => {
@@ -177,6 +181,7 @@ test('composeResumePrompt repeats the rules and includes reason and note', () =>
   assert.ok(p.includes('git status'));
   assert.ok(p.includes('## Rules'));
   assert.ok(p.includes('  - src'));
+  assert.ok(p.includes('You have network access') && !p.includes('No network'), 'resumed jobs get the same network rule');
   assert.ok(p.includes('job_id set to exactly "job-1"'));
   assert.ok(p.includes('## Owner note\n\nPrefer small diffs.'));
   assert.ok(!composeResumePrompt({ runId: 'r1', jobId: 'job-1', spec, reason: 'x' }).includes('Owner note'));
