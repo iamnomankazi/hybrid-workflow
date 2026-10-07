@@ -6,6 +6,7 @@ import path from 'node:path';
 import {
   assertCleanEnv, assertSafeArgs, buildExecArgs, buildResumeArgs, buildWorkerEnv, codexVersion,
   defaultCodexExe, dirHasAgentCli, resolveCodexExe, unverifiedCodexWarning, VERIFIED_CODEX_VERSION,
+  BASE_SHELL_ENV, playwrightEnv,
 } from '../../src/codex.mjs';
 
 test('unverifiedCodexWarning is silent only for the verified Codex release', () => {
@@ -65,10 +66,10 @@ test('buildExecArgs exact order with defaults', () => {
     'exec', '--ignore-user-config', '--strict-config', '--ignore-rules', '--skip-git-repo-check',
     '-m', 'gpt-6.1-sol', '-c', 'model_reasoning_effort="high"', '-s', 'workspace-write',
     '-c', 'approval_policy="never"', '-c', 'shell_environment_policy.inherit="core"',
-    '-c', 'windows.sandbox="elevated"', '-c', 'project_doc_max_bytes=0',
-    '-c', 'skills.include_instructions=false', '-c', 'web_search="disabled"',
+    '-c', "shell_environment_policy.set.PSExecutionPolicyPreference='RemoteSigned'",
+    '-c', 'windows.sandbox="elevated"', '-c', 'sandbox_workspace_write.network_access=true',
+    '-c', 'project_doc_max_bytes=0', '-c', 'skills.include_instructions=false',
     '-c', 'features.apps=false', '-c', 'features.plugins=false', '-c', 'features.remote_plugin=false',
-    '-c', 'features.image_generation=false', '-c', 'features.goals=false',
     '-C', 'C:\\wt\\j1', '--json', '-o', 'C:\\a\\last.md', '-',
   ]);
 });
@@ -80,7 +81,8 @@ test('buildExecArgs with schema, projectDocs and unelevated sandbox', () => {
   assert.ok(!args.includes('project_doc_max_bytes=0'));
   assert.ok(args.includes('skills.include_instructions=false'), 'skills catalog is suppressed even with project docs on');
   assert.ok(args.includes('features.apps=false'), 'codex_apps MCP is disabled even with project docs on');
-  assert.ok(args.includes('web_search="disabled"'), 'web access tool is disabled');
+  assert.ok(!args.some((a) => a.startsWith('web_search')), 'web search stays at the Codex default (on)');
+  assert.ok(args.includes('sandbox_workspace_write.network_access=true'), 'shell commands get outbound network');
   assert.ok(args.includes('windows.sandbox="unelevated"'));
   assert.deepEqual(args.slice(-5), ['-o', 'C:\\a\\last.md', '--output-schema', 'C:\\s.json', '-']);
   assert.equal(args[args.indexOf('-s') + 1], 'read-only');
@@ -92,10 +94,10 @@ test('buildResumeArgs exact order, no -s and no -C', () => {
     'exec', 'resume', '--ignore-user-config', '--strict-config', '--ignore-rules', '--skip-git-repo-check',
     '-m', 'gpt-6.1-sol', '-c', 'model_reasoning_effort="high"', '-c', 'sandbox_mode="workspace-write"',
     '-c', 'approval_policy="never"', '-c', 'shell_environment_policy.inherit="core"',
-    '-c', 'windows.sandbox="elevated"', '-c', 'project_doc_max_bytes=0',
-    '-c', 'skills.include_instructions=false', '-c', 'web_search="disabled"',
+    '-c', "shell_environment_policy.set.PSExecutionPolicyPreference='RemoteSigned'",
+    '-c', 'windows.sandbox="elevated"', '-c', 'sandbox_workspace_write.network_access=true',
+    '-c', 'project_doc_max_bytes=0', '-c', 'skills.include_instructions=false',
     '-c', 'features.apps=false', '-c', 'features.plugins=false', '-c', 'features.remote_plugin=false',
-    '-c', 'features.image_generation=false', '-c', 'features.goals=false',
     '--json', '-o', 'C:\\a\\last.md', '--output-schema', 'C:\\s.json', SESSION, '-',
   ]);
   assert.ok(!args.includes('-s'));
@@ -205,6 +207,32 @@ test('buildWorkerEnv sets CODEX_HOME only when configured and honours systemRoot
     assert.equal(withHome.env.CODEX_HOME, 'C:\\codex-home');
     assert.deepEqual(withHome.kept_names, []);
   });
+});
+
+test('a shared Playwright install is exposed only when both browsers and the package exist', () => {
+  withTmp((dir) => {
+    assert.equal(playwrightEnv(dir), null);
+    assert.equal(playwrightEnv(null), null);
+    dirent(path.join(dir, 'browsers'));
+    assert.equal(playwrightEnv(dir), null, 'browsers without the playwright package');
+    dirent(path.join(dir, 'node_modules', 'playwright'));
+    const env = playwrightEnv(dir);
+    assert.deepEqual(env, { PLAYWRIGHT_BROWSERS_PATH: path.join(dir, 'browsers'), NODE_PATH: path.join(dir, 'node_modules') });
+    const root = dirent(path.join(dir, 'Win'));
+    const built = buildWorkerEnv({}, { nodeDir: dir, systemRoot: root, playwrightDir: dir });
+    assert.equal(built.env.PLAYWRIGHT_BROWSERS_PATH, env.PLAYWRIGHT_BROWSERS_PATH);
+    assert.equal(built.playwright_dir, dir);
+    assert.equal(buildWorkerEnv({}, { nodeDir: dir, systemRoot: root }).playwright_dir, null);
+  });
+});
+
+test('shell variables reach commands through shell_environment_policy.set as TOML literals', () => {
+  const args = buildExecArgs({ ...base, worktree: 'C:\\wt', shellEnv: { ...BASE_SHELL_ENV, NODE_PATH: 'C:\\hw\\ms-playwright\\node_modules' } });
+  assert.ok(args.includes("shell_environment_policy.set.NODE_PATH='C:\\hw\\ms-playwright\\node_modules'"));
+  assert.ok(args.includes("shell_environment_policy.set.PSExecutionPolicyPreference='RemoteSigned'"));
+  assert.ok(buildResumeArgs({ ...base, sessionId: SESSION, shellEnv: { A: 'b' } }).includes("shell_environment_policy.set.A='b'"));
+  assert.throws(() => buildExecArgs({ ...base, worktree: 'C:\\wt', shellEnv: { X: "it's" } }), /Invalid value/);
+  assert.throws(() => buildExecArgs({ ...base, worktree: 'C:\\wt', shellEnv: { 'A=B': 'x' } }), /Invalid shell variable name/);
 });
 
 test('assertCleanEnv guard', () => {

@@ -15,7 +15,9 @@ import {
   ensureDir, exists, fileSize, nowIso, readJson, readJsonlFrom, readText, sha256, sha256File, sleep,
   tryCreateLock, withRetry, writeFileExclusive, writeJsonAtomic,
 } from '../fsutil.mjs';
-import { buildExecArgs, buildResumeArgs, buildWorkerEnv, codexVersion } from '../codex.mjs';
+import {
+  BASE_SHELL_ENV, buildExecArgs, buildResumeArgs, buildWorkerEnv, codexVersion, playwrightEnv,
+} from '../codex.mjs';
 import { composePrompt, composeResumePrompt } from '../spec.mjs';
 import * as git from '../git.mjs';
 import { areAlive, getIdentity, isAlive, killTree, ownIdentity, sweepOrphans } from '../proc.mjs';
@@ -914,6 +916,7 @@ export class Runner {
       model, effort, sandbox, lastMessageFile: ap.lastMessage,
       outputSchemaFile: run.config.output_schema ? WORKER_OUTPUT_SCHEMA : null,
       windowsSandbox: run.config.windows_sandbox, projectDocs: run.config.project_docs,
+      shellEnv: { ...BASE_SHELL_ENV, ...(playwrightEnv(run.config.playwright_dir ?? null) ?? {}) },
     };
     const args = resume
       ? buildResumeArgs({ ...common, sessionId: s.codex_session_id })
@@ -923,6 +926,7 @@ export class Runner {
       gitDirs: git.gitInstallDirs(run.tools.git_exe),
       extraPath: run.config.extra_path,
       codexHome: run.config.codex_home,
+      playwrightDir: run.config.playwright_dir ?? null,
     });
     writeJsonAtomic(ap.launch, {
       schema: SCHEMAS.launch,
@@ -938,6 +942,7 @@ export class Runner {
       env_names: Object.keys(workerEnv.env).sort(),
       path_entries: workerEnv.path_entries,
       dropped_path_entries: workerEnv.dropped_path_entries,
+      playwright_dir: workerEnv.playwright_dir,
       global_instructions: globalInstructions,
       stdin_file: ap.prompt,
       stdout_file: ap.events,

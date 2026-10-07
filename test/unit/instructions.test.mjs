@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
-  describeGlobalInstructions, globalInstructionProbes, readGlobalInstructions,
+  codexAuthExposure, describeGlobalInstructions, globalInstructionProbes, parseSandboxReadable, readGlobalInstructions,
 } from '../../src/instructions.mjs';
 import { readObservedIsolation } from '../../src/rollout.mjs';
 
@@ -73,6 +73,29 @@ test('probes come only from the pinned version and skip markup lines', () => {
     ]);
     fs.appendFileSync(path.join(home, 'AGENTS.md'), '\nchanged');
     assert.equal(globalInstructionProbes(home, pinned.fingerprint), null, 'a changed file is never attributed');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('parseSandboxReadable reads icacls output for the Codex sandbox accounts', () => {
+  const head = 'C:\\Users\\u\\.codex\\auth.json S-1-5-21-1-2-3-4:(I)(DENY)(W,D,Rc,DC)\n';
+  const tail = '                                NT AUTHORITY\\SYSTEM:(I)(F)\n                                TUF\\u:(I)(F)\n';
+  assert.equal(parseSandboxReadable(`${head}                                TUF\\CodexSandboxUsers:(I)(RX)\n${tail}`), true);
+  assert.equal(parseSandboxReadable(`${head}                                TUF\\CodexSandboxUsers:(I)(DENY)(RD)\n`
+    + `                                TUF\\CodexSandboxUsers:(I)(RX)\n${tail}`), false, 'an inherited read deny wins');
+  assert.equal(parseSandboxReadable(`${head}${tail}`), false, 'no sandbox entry');
+  assert.equal(parseSandboxReadable(`${head}                                TUF\\CodexSandboxUsers:(I)(DENY)(W,D)\n`
+    + `                                TUF\\CodexSandboxUsers:(I)(RX)\n${tail}`), true, 'a write-only deny does not block reading');
+});
+
+test('codexAuthExposure: missing file, readable, and unknown when icacls fails', () => {
+  const home = tempHome();
+  try {
+    assert.deepEqual(codexAuthExposure(home, { icacls: () => '' }), { file: path.join(home, 'auth.json'), present: false, sandbox_readable: false });
+    fs.writeFileSync(path.join(home, 'auth.json'), '{}');
+    assert.equal(codexAuthExposure(home, { icacls: () => 'x TUF\\CodexSandboxUsers:(I)(RX)\n' }).sandbox_readable, true);
+    assert.equal(codexAuthExposure(home, { icacls: () => { throw new Error('no icacls'); } }).sandbox_readable, null);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

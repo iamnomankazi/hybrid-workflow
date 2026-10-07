@@ -72,16 +72,13 @@ function commonConfigArgs({ model, effort }) {
   ];
 }
 
-// Features on by default in Codex 0.160.1 that give a worker tools running outside its sandboxed
-// shell, none of which --ignore-user-config removes (verified from a worker's own tool table):
-// apps → the account's `codex_apps` MCP (incl. a command_exec with inherited access);
-// plugins/remote_plugin → plugin MCP servers (e.g. `codex_security`); image_generation →
-// image_gen; goals → goal tools. Web access (`web__run`) is a config key, not a feature.
-// Not listed: multi_agent/multi_agent_v2=false left the `collaboration.*` tools (spawn_agent, …)
-// in the tool table, so no verified switch for them exists yet.
-export const WORKER_DISABLED_FEATURES = Object.freeze([
-  'apps', 'plugins', 'remote_plugin', 'image_generation', 'goals',
-]);
+// Workers keep Codex's normal tool surface (shell, apply_patch, web search, images, goals,
+// sub-agents) plus outbound network. Only features that act with the signed-in account's
+// authority are disabled, since --ignore-user-config does not remove them (verified from a
+// worker's own tool table): apps → the `codex_apps` MCP server (hundreds of account connectors —
+// mail, Drive, Calendar, GitHub — plus a command_exec with inherited access); plugins and
+// remote_plugin → plugin MCP servers installed on the account (e.g. `codex_security`).
+export const WORKER_DISABLED_FEATURES = Object.freeze(['apps', 'plugins', 'remote_plugin']);
 
 // The Codex release whose worker tool table the list above was verified against (`codex
 // --version` output). The desktop app updates codex.exe in place, so `doctor` and `run start`
@@ -96,21 +93,40 @@ export function unverifiedCodexWarning(version) {
 
 // --ignore-user-config does not stop Codex from injecting the user's skills catalog from
 // CODEX_HOME; skills.include_instructions=false does (verified against 0.160.1 rollouts).
-function tailConfigArgs({ windowsSandbox, projectDocs }) {
+// Shell commands get outbound network (curl, package installs, browsers); writes stay confined
+// to the worktree by the sandbox. The setting applies to workspace-write; read-only presets
+// (reviewers) keep Codex's read-only defaults. inherit="core" strips everything else from the
+// shell's environment, so variables commands need (shared browser, script policy) go through
+// shell_environment_policy.set.
+function tailConfigArgs({ windowsSandbox, projectDocs, shellEnv }) {
   return [
     '-c', 'approval_policy="never"',
     '-c', 'shell_environment_policy.inherit="core"',
+    ...shellEnvArgs(shellEnv),
     '-c', `windows.sandbox="${windowsSandbox}"`,
+    '-c', 'sandbox_workspace_write.network_access=true',
     ...(projectDocs ? [] : ['-c', 'project_doc_max_bytes=0']),
     '-c', 'skills.include_instructions=false',
-    '-c', 'web_search="disabled"',
     ...WORKER_DISABLED_FEATURES.flatMap((f) => ['-c', `features.${f}=false`]),
   ];
 }
 
+// Shell variables every worker gets. PowerShell's execution policy is not a security boundary,
+// and Restricted (the sandbox accounts' default) breaks local scripts and .ps1 shims such as npm.
+export const BASE_SHELL_ENV = Object.freeze({ PSExecutionPolicyPreference: 'RemoteSigned' });
+
+// TOML literal strings ('...') need no escaping for Windows paths but cannot hold ' or newlines.
+function shellEnvArgs(shellEnv = {}) {
+  return Object.entries(shellEnv).flatMap(([name, value]) => {
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) throw new Error(`Invalid shell variable name: ${name}`);
+    if (typeof value !== 'string' || /['\r\n]/.test(value)) throw new Error(`Invalid value for shell variable ${name}`);
+    return ['-c', `shell_environment_policy.set.${name}='${value}'`];
+  });
+}
+
 export function buildExecArgs({
   model, effort, sandbox, worktree, lastMessageFile, outputSchemaFile = null,
-  windowsSandbox = 'elevated', projectDocs = false,
+  windowsSandbox = 'elevated', projectDocs = false, shellEnv = BASE_SHELL_ENV,
 }) {
   checkEnums({ model, effort, sandbox, windowsSandbox });
   checkPath('worktree', worktree);
@@ -120,7 +136,7 @@ export function buildExecArgs({
     'exec', '--ignore-user-config', '--strict-config', '--ignore-rules', '--skip-git-repo-check',
     ...commonConfigArgs({ model, effort }),
     '-s', sandbox,
-    ...tailConfigArgs({ windowsSandbox, projectDocs }),
+    ...tailConfigArgs({ windowsSandbox, projectDocs, shellEnv }),
     '-C', worktree,
     '--json', '-o', lastMessageFile,
     ...(outputSchemaFile ? ['--output-schema', outputSchemaFile] : []),
@@ -133,7 +149,7 @@ export function buildExecArgs({
 // `codex exec resume` has neither -s nor -C: the sandbox goes through -c, the cwd is the process cwd.
 export function buildResumeArgs({
   model, effort, sandbox, sessionId, lastMessageFile, outputSchemaFile = null,
-  windowsSandbox = 'elevated', projectDocs = false,
+  windowsSandbox = 'elevated', projectDocs = false, shellEnv = BASE_SHELL_ENV,
 }) {
   checkEnums({ model, effort, sandbox, windowsSandbox });
   if (typeof sessionId !== 'string' || !SESSION_ID_RE.test(sessionId)) throw new Error(`Invalid session id: ${sessionId}`);
@@ -143,7 +159,7 @@ export function buildResumeArgs({
     'exec', 'resume', '--ignore-user-config', '--strict-config', '--ignore-rules', '--skip-git-repo-check',
     ...commonConfigArgs({ model, effort }),
     '-c', `sandbox_mode="${sandbox}"`,
-    ...tailConfigArgs({ windowsSandbox, projectDocs }),
+    ...tailConfigArgs({ windowsSandbox, projectDocs, shellEnv }),
     '--json', '-o', lastMessageFile,
     ...(outputSchemaFile ? ['--output-schema', outputSchemaFile] : []),
     sessionId, '-',
@@ -193,7 +209,16 @@ const isDir = (p) => {
   }
 };
 
-export function buildWorkerEnv(sourceEnv, { nodeDir, gitDirs = [], extraPath = [], codexHome = null, systemRoot } = {}) {
+// A shared Playwright install (browsers\ + node_modules\playwright) that the sandbox accounts can
+// read; workers cannot use the user's own %LOCALAPPDATA%\ms-playwright. Null when absent.
+export function playwrightEnv(dir) {
+  if (!dir || !isDir(path.join(dir, 'browsers')) || !isDir(path.join(dir, 'node_modules', 'playwright'))) return null;
+  return { PLAYWRIGHT_BROWSERS_PATH: path.join(dir, 'browsers'), NODE_PATH: path.join(dir, 'node_modules') };
+}
+
+export function buildWorkerEnv(sourceEnv, {
+  nodeDir, gitDirs = [], extraPath = [], codexHome = null, systemRoot, playwrightDir = null,
+} = {}) {
   const env = {};
   const kept = [];
   const dropped = [];
@@ -208,6 +233,8 @@ export function buildWorkerEnv(sourceEnv, { nodeDir, gitDirs = [], extraPath = [
     }
   }
   if (codexHome) env.CODEX_HOME = codexHome;
+  const playwright = playwrightEnv(playwrightDir);
+  if (playwright) Object.assign(env, playwright);
 
   const root = systemRoot ?? sourceSystemRoot ?? 'C:\\Windows';
   const candidates = [
@@ -240,5 +267,6 @@ export function buildWorkerEnv(sourceEnv, { nodeDir, gitDirs = [], extraPath = [
     kept_names: kept.sort(),
     dropped_names: dropped.sort(),
     dropped_path_entries: droppedPathEntries,
+    playwright_dir: playwright ? playwrightDir : null,
   };
 }

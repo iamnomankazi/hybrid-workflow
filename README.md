@@ -48,18 +48,24 @@ State lives in `%LOCALAPPDATA%\HybridWorkflow` (override with `HYBRID_HOME`); wo
 * [docs/CLI.md](docs/CLI.md): command reference, exit codes, job spec
 * [docs/ORCHESTRATION.md](docs/ORCHESTRATION.md): the contract Opus follows
 
-## Worker isolation
+## Workers
+
+Hybrid is a general-purpose workflow. Every worker gets the normal capabilities of an agent
+harness, with one baseline for all jobs:
+- **Tools:** shell, files, `apply_patch`, web search and fetch, outbound network from shell
+  commands, and a real browser (Playwright: navigation, forms, uploads, downloads) through a
+  shared install at `%SystemDrive%\hw\ms-playwright` (`playwright_dir` in `config.json`).
+- **Not available:** authority borrowed from the signed-in account. Codex's account connectors
+  (`codex_apps`: mail, Drive, Calendar, GitHub, …) and account-installed plugins are disabled.
 
 Every worker runs `codex exec --ignore-user-config --strict-config --ignore-rules` with explicit
 model, reasoning effort, sandbox (`read-only` or `workspace-write` only),
-`approval_policy="never"` and `shell_environment_policy.inherit="core"`, an allowlisted
-environment (no `OPENAI_*`, `ANTHROPIC_*`, `CLAUDE*`, `CODEX_*`, proxies) and a curated `PATH`
-without any `codex`/`claude` executables. Project `AGENTS.md` files and the user's Codex skills
-catalog are suppressed. Codex features that add tools outside the sandboxed shell are disabled:
-account apps (`codex_apps` MCP), plugins, web access, image generation and goals. Codex's
-collaboration (sub-agent) tools have no verified switch yet and remain exposed.
-The user's `config.toml` is never loaded, and nothing in `CODEX_HOME` is
-ever modified (Hybrid only hashes the global instructions file, below).
+`approval_policy="never"`, an allowlisted environment (no `OPENAI_*`, `ANTHROPIC_*`, `CLAUDE*`,
+`CODEX_*`, proxies) and a curated `PATH` without any `codex`/`claude` executables. Writes stay
+confined to the worktree. Project `AGENTS.md` files and the user's Codex skills catalog are
+suppressed. The user's `config.toml` is never loaded, and nothing in `CODEX_HOME` is ever
+modified by Hybrid. `doctor` warns if Codex's sandbox accounts can read `CODEX_HOME\auth.json`;
+docs/ARCHITECTURE.md §9 has the one-line fix.
 
 **Known limitation:** Codex 0.160.1 always injects `CODEX_HOME/AGENTS.md` (or
 `AGENTS.override.md`) into workers and offers no switch to disable it. Hybrid pins its
@@ -86,22 +92,24 @@ npm run test:integration # spawns real processes (git, PowerShell CIM, WMI) with
 | Native Codex (Sol, Luna) with pinned model, effort, sandbox and approval; observed config matches the request | Acceptance-tested on every real job |
 | Runner and workers survive a full Claude desktop quit (WMI launch) | Acceptance-tested |
 | Two parallel 90+ minute workers with sparse `hybrid wait` wakes | Acceptance-tested (~98 min) |
-| Writes outside the worktree, network, `npm install` blocked without hanging; no approval prompts | Acceptance-tested; read access is broad |
+| Writes outside the worktree blocked without hanging; no approval prompts | Acceptance-tested; read access is broad |
+| Web search, outbound network (Node `fetch`, `npm`), Playwright browser with form, upload and download | Acceptance-tested |
 | Worker environment: no `OPENAI_*`/`CLAUDE*`, no `codex`/`claude` on `PATH` | Acceptance-tested |
 | Patch rules: hooks, symlinks/junctions, protected paths, write scope | Acceptance-tested |
 | Cancel of a real cross-user process tree, no orphans, patch captured | Acceptance-tested |
 | Runner crash: worker survives and is adopted once, or marked interrupted | Acceptance-tested |
 | Manual resume: same session, pinned flags, worker re-inspects first | Acceptance-tested |
 | Stale-epoch submit/cancel rejected at the CLI and by the runner | Acceptance-tested |
-| Worker tool isolation (no account connectors, plugins, web access) | Acceptance-tested (tool table enumerated) |
+| No account connectors or account plugins in workers | Acceptance-tested (tool table enumerated) |
 | Quota consumption | Measured briefly; the real usage-limit → `paused_quota` path has not been observed |
 | Auth refresh races | Not tested |
 | Sleep | Not tested. Run on AC with system sleep disabled; there is no keep-awake in Hybrid |
 
-Known gaps: Codex's collaboration (sub-agent) tools stay in the worker tool table; `apply_patch`
-can fail with "Failed to write file" after long-lived shell sessions (workers fall back to shell
-writes, and patch capture is unaffected); no Playwright browser in workers (the sandbox user
-cannot read the user's AppData).
+Known gaps:
+- Windows-native TLS clients (`curl.exe`, `Invoke-WebRequest`, git over HTTPS) can fail inside
+  Codex's network sandbox account. See docs/ARCHITECTURE.md §9.
+- `apply_patch` can fail with "Failed to write file" in a folder a shell command created.
+  Workers fall back to shell writes, and patch capture is unaffected.
 
 ## License
 

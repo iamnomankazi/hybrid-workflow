@@ -13,7 +13,7 @@ epoch is accepted (it guards against stale controllers, not impersonation; ARCHI
 | --- | --- | --- |
 | `repo add <alias> <path> [--node-modules junction\|none]` | config | Register a repository alias |
 | `repo list` | — | Show aliases |
-| `doctor` | — | Check node, git, codex, PowerShell/CIM, state and worktree roots; warn when a global `CODEX_HOME` AGENTS.md exists (it reaches every worker) or Codex is not the release whose worker tool isolation was verified |
+| `doctor` | — | Check node, git, codex, PowerShell/CIM, state and worktree roots; warn when a global `CODEX_HOME` AGENTS.md exists (it reaches every worker) or Codex is not the release whose worker tool isolation was verified; report the shared Playwright install and warn if the Codex sandbox accounts can read `auth.json` |
 | `run start --repo <alias> [--base <ref>] [--goal <text>] [--concurrency <n≤4>]` | creates run | Take the global lock, pin config + base commit + Codex version + global-instructions fingerprint, owner epoch 1, launch the runner |
 | `run list` | — | All runs, newest first |
 | `run close --epoch N` | yes | Refuses while jobs are queued/active; closes the run, stops the runner, releases the global lock |

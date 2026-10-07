@@ -170,9 +170,10 @@ Fresh attempt:
 codex exec --ignore-user-config --strict-config --ignore-rules --skip-git-repo-check
   -m <model> -c model_reasoning_effort="<effort>" -s <read-only|workspace-write>
   -c approval_policy="never" -c shell_environment_policy.inherit="core"
-  -c windows.sandbox="elevated" [-c project_doc_max_bytes=0]
-  -c skills.include_instructions=false -c web_search="disabled"
-  -c features.<f>=false   for f in apps, plugins, remote_plugin, image_generation, goals
+  -c shell_environment_policy.set.<VAR>='<value>'   (see "Worker capabilities")
+  -c windows.sandbox="elevated" -c sandbox_workspace_write.network_access=true
+  [-c project_doc_max_bytes=0] -c skills.include_instructions=false
+  -c features.apps=false -c features.plugins=false -c features.remote_plugin=false
   -C <worktree> --json -o <attempt>\last-message.md [--output-schema <schema>] -
 ```
 Resume attempt (`exec resume` has no `-s`/`-C`): the same flags with
@@ -200,18 +201,54 @@ content from `CODEX_HOME` and the signed-in account (verified from session rollo
 | --- | --- | --- |
 | Project `AGENTS.md` in the worktree | `project_doc_max_bytes=0` | Suppressed. Capsules carry all task context |
 | User skills catalog (`<skills_instructions>`) | `skills.include_instructions=false` | Suppressed |
-| Account apps: the `codex_apps` MCP server (hundreds of connector tools acting on the signed-in account, e.g. mail, GitHub, Drive, plus `codexless.codex.command_exec` with `access: "inherit"`) | `features.apps=false` | Disabled. A worker did call `command_exec`; only `approval_policy="never"` refused it |
-| Remote plugin MCP servers (e.g. `codex_security`, 23 tools) | `features.plugins=false`, `features.remote_plugin=false` | Disabled |
-| Web access tool (`web__run`) | `web_search="disabled"` | Disabled |
-| `image_gen` and goal tools | `features.image_generation=false`, `features.goals=false` | Disabled |
-| Collaboration tools (`spawn_agent`, `send_message`, `followup_task`, `wait_agent`, `list_agents`, `interrupt_agent`) | **None verified.** `features.multi_agent=false` and `features.multi_agent_v2=false` left them in the tool table | **Known limitation.** Still exposed. No worker has called them |
+| Account apps: the `codex_apps` MCP server (hundreds of connector tools acting on the signed-in account, e.g. mail, Drive, Calendar, GitHub, plus `codexless.codex.command_exec` with `access: "inherit"`) | `features.apps=false` | **Disabled.** A worker did call `command_exec`; only `approval_policy="never"` refused it |
+| Plugin MCP servers installed on the account (e.g. `codex_security`, 23 tools) | `features.plugins=false`, `features.remote_plugin=false` | **Disabled** |
 | Global `<CODEX_HOME>/AGENTS.override.md`, else `<CODEX_HOME>/AGENTS.md` | **None exists.** `instructions` is additive; no flag or feature disables it | **Known limitation.** Pinned and recorded (below) |
 
-The features above are stable and on by default in 0.160.1, and none runs inside the worker's
-sandboxed shell. The list lives in `WORKER_DISABLED_FEATURES` (`src/codex.mjs`). It was verified
-by having a real worker enumerate its own tool table (`Object.keys(tools)` in its code cell):
-518 tool names without these flags, 17 with them, and no MCP servers. `apply_patch` still works.
-Re-verify on every Codex upgrade, because new default-on features would reach workers.
+### Worker capabilities
+
+Hybrid is a general-purpose workflow: workers get the capabilities a normal agent harness gives
+them, minus authority borrowed from the signed-in account. There is one baseline for all workers
+(no per-task profiles):
+
+| Capability | How |
+| --- | --- |
+| Shell, files, `apply_patch`, images, goals, sub-agents (`collaboration.*`) | Codex defaults, unchanged |
+| Web search and fetch (`web__run`) | Codex default (runs server-side) |
+| Outbound network from shell commands (`node`/`fetch`, `npm`, browsers) | `sandbox_workspace_write.network_access=true`; commands run as the `CodexSandboxOnline` account. Read-only presets keep Codex's read-only defaults |
+| Browser: navigation, forms, uploads, downloads | Shared Playwright install at `playwright_dir` (default `%SystemDrive%\hw\ms-playwright`: `browsers\` + `node_modules\playwright`), readable by the sandbox accounts. Workers get `PLAYWRIGHT_BROWSERS_PATH` and `NODE_PATH`, so `require('playwright')` works. The user's own `%LOCALAPPDATA%\ms-playwright` is not readable by the sandbox accounts |
+| PowerShell scripts and `.ps1` shims (`npm`, …) | `PSExecutionPolicyPreference=RemoteSigned` (the sandbox accounts default to Restricted; execution policy is not a security boundary) |
+| **Not available:** account connectors and account-installed plugins | `features.apps`, `plugins`, `remote_plugin` = false |
+
+`shell_environment_policy.inherit="core"` strips every other variable from the shell, so the
+variables above reach commands through `shell_environment_policy.set` (TOML literal strings).
+
+Writes stay confined to the worktree: `Documents` and `AppData\Roaming` carry Modify grants for
+`CodexSandboxUsers`, but the sandbox's per-session write restriction blocks them (verified).
+
+**Credentials.** Codex grants `CodexSandboxUsers` read access to `CODEX_HOME`, so `auth.json`
+(the ChatGPT tokens) is readable by workers, which have network. `doctor` warns while it is.
+Codex replaces `auth.json` on every write, so a deny on the file itself would be lost. The
+durable fix is one ACE on the folder that applies only to files directly inside it (not to the
+sandbox's own subfolders) and is inherited by every new `auth.json`:
+
+```
+icacls "%USERPROFILE%\.codex" /deny "CodexSandboxUsers:(OI)(IO)(NP)(RD)"
+```
+
+Revert with `icacls "%USERPROFILE%\.codex" /remove:d CodexSandboxUsers`.
+
+**Windows-native TLS.** Schannel clients (`curl.exe`, `Invoke-WebRequest`, git over HTTPS)
+fail with `SEC_E_NO_CREDENTIALS` under `CodexSandboxOnline`. The likely cause is that Codex never
+created a Windows user profile for that account (`CodexSandboxOffline` has one). This is a known
+compatibility issue, not a blocker: web search, Node `fetch`, npm and Chromium use their own TLS
+and work. Hybrid does not create the profile.
+
+The disabled features are stable and on by default in Codex 0.160.1. The list lives in
+`WORKER_DISABLED_FEATURES` (`src/codex.mjs`). It was verified by having a real worker enumerate
+its own tool table (`Object.keys(tools)` in its code cell): 518 tool names without these flags,
+no MCP servers with them. Re-verify on every Codex upgrade, because new default-on features
+would reach workers.
 
 The Codex desktop app updates `codex.exe` in place, so the verified release is pinned in code
 (`VERIFIED_CODEX_VERSION`) and guarded:
@@ -300,7 +337,7 @@ Nothing is ever relaunched automatically. After a reboot every in-flight job bec
   "owner_history": [ { "session_id": "…", "epoch": 1, "acquired_at": "…", "released_at": "…" } ],
   "versions": { "hybrid": "0.1.0", "node": "v24…", "git": "git version …", "codex": "codex-cli 0.160.1" },
   "tools": { "node_exe": "C:\\…\\node.exe", "git_exe": "C:\\…\\git.exe" },
-  "config": { /* buildRunConfig(): codex_exe, codex_prefix_args, codex_home, worktree_root,
+  "config": { /* buildRunConfig(): codex_exe, codex_prefix_args, codex_home, worktree_root, playwright_dir,
                 max_concurrency, default_timeout_minutes, max_timeout_minutes, stall_minutes,
                 runner_idle_exit_minutes, poll_ms, liveness_check_ms, heartbeat_ms,
                 windows_sandbox, project_docs, output_schema, extra_path, presets

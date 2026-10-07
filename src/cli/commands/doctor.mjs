@@ -2,10 +2,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { loadMachineConfig } from '../../config.mjs';
 import { defaultCodexHome } from '../../rollout.mjs';
-import { describeGlobalInstructions, readGlobalInstructions } from '../../instructions.mjs';
-import { resolveCodexExe, codexVersion, unverifiedCodexWarning } from '../../codex.mjs';
+import { codexAuthExposure, describeGlobalInstructions, readGlobalInstructions } from '../../instructions.mjs';
+import { resolveCodexExe, codexVersion, playwrightEnv, unverifiedCodexWarning } from '../../codex.mjs';
 import { resolveGitExe, gitVersion } from '../../git.mjs';
-import { homePaths, defaultWorktreeRoot } from '../../paths.mjs';
+import { homePaths, defaultPlaywrightDir, defaultWorktreeRoot } from '../../paths.mjs';
 import { ensureDir, randomHex } from '../../fsutil.mjs';
 import { ownIdentity } from '../../proc.mjs';
 import { readActiveRunLock } from '../../store.mjs';
@@ -76,6 +76,27 @@ function globalInstructionsCheck(machine) {
     : { ok: true, detail: `none in ${gi.codex_home}` };
 }
 
+// Not failures: workers run without a shared browser, or with auth.json readable, but the
+// operator should know (docs/ARCHITECTURE.md §9).
+function browserCheck(machine) {
+  const dir = path.resolve(machine.playwright_dir ?? defaultPlaywrightDir());
+  return playwrightEnv(dir)
+    ? { ok: true, detail: `${dir} (PLAYWRIGHT_BROWSERS_PATH, NODE_PATH for workers)` }
+    : { ok: true, warn: true, detail: `no shared Playwright install at ${dir} (browsers\\ + node_modules\\playwright); workers have no browser` };
+}
+
+function credentialsCheck(machine) {
+  const exposure = codexAuthExposure(machine.codex_home ?? defaultCodexHome());
+  if (!exposure.present) return { ok: true, detail: `no ${exposure.file}` };
+  if (exposure.sandbox_readable === false) return { ok: true, detail: `${exposure.file} not readable by the Codex sandbox accounts` };
+  return {
+    ok: true,
+    warn: true,
+    detail: `${exposure.file} ${exposure.sandbox_readable ? 'is readable' : 'may be readable'} by the Codex sandbox accounts `
+      + '(workers have network); see docs/ARCHITECTURE.md §9 for the one-line ACL fix',
+  };
+}
+
 async function activeRunCheck(home) {
   const lock = readActiveRunLock(home);
   if (!lock?.run_id) return { ok: true, detail: 'none' };
@@ -107,6 +128,8 @@ export const doctor = {
     await check('codex', () => codexCheck(machine ?? loadMachineConfig(c.home)));
     await check('worktree_root', () => worktreeRootCheck(machine ?? loadMachineConfig(c.home)));
     await check('global_instructions', () => globalInstructionsCheck(machine ?? loadMachineConfig(c.home)));
+    await check('browser', () => browserCheck(machine ?? loadMachineConfig(c.home)));
+    await check('credentials', () => credentialsCheck(machine ?? loadMachineConfig(c.home)));
     await check('powershell_cim', cimCheck);
     await check('active_run', () => activeRunCheck(c.home));
     const ok = checks.every((x) => x.ok);

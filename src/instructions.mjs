@@ -8,6 +8,7 @@
 // every launch/result records it. Only presence, size and sha256 are ever recorded.
 import fs from 'node:fs';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { sha256 } from './fsutil.mjs';
 
 export const GLOBAL_INSTRUCTION_FILES = Object.freeze(['AGENTS.override.md', 'AGENTS.md']);
@@ -47,6 +48,28 @@ export function globalInstructionProbes(codexHome, fingerprint, { max = 8 } = {}
     .filter((l) => l.length >= 24 && !/^(<!--|[#|>])/.test(l))
     .slice(0, max)
     .map((l) => l.slice(0, 60));
+}
+
+// Codex's Windows sandbox grants its accounts (group CodexSandboxUsers) read access to CODEX_HOME,
+// including auth.json with the ChatGPT tokens. Workers have web and network access, so that file
+// should carry a deny ACE for the group; this reports whether it does. Presence/ACL only.
+// sandbox_readable: true (an allow and no deny for the sandbox accounts), false, or null (unknown).
+export function parseSandboxReadable(icaclsOutput) {
+  const READ_RIGHTS = new Set(['F', 'M', 'RX', 'R', 'RD', 'GR', 'GA']);
+  const reads = (l) => [...l.matchAll(/\(([^)]*)\)/g)].some((m) => m[1].split(',').some((r) => READ_RIGHTS.has(r.trim())));
+  const lines = icaclsOutput.split(/\r?\n/).filter((l) => /CodexSandbox/i.test(l));
+  if (lines.some((l) => /\(DENY\)/.test(l) && reads(l))) return false;
+  return lines.some((l) => !/\(DENY\)/.test(l) && reads(l));
+}
+
+export function codexAuthExposure(codexHome, { icacls = (file) => execFileSync('icacls', [file], { encoding: 'utf8', windowsHide: true, timeout: 20_000 }) } = {}) {
+  const file = path.join(codexHome, 'auth.json');
+  if (!fs.existsSync(file)) return { file, present: false, sandbox_readable: false };
+  try {
+    return { file, present: true, sandbox_readable: parseSandboxReadable(icacls(file)) };
+  } catch {
+    return { file, present: true, sandbox_readable: null };
+  }
 }
 
 export function describeGlobalInstructions(gi) {

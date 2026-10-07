@@ -21,6 +21,12 @@ export function defaultWorktreeRoot(env = process.env) {
   return path.join(`${drive}\\`, 'hw', 'wt');
 }
 
+// Shared Playwright install readable by the Codex sandbox accounts: %SystemDrive%\hw\ms-playwright.
+export function defaultPlaywrightDir(env = process.env) {
+  const drive = env.SystemDrive || env.SYSTEMDRIVE || 'C:';
+  return path.join(`${drive}\\`, 'hw', 'ms-playwright');
+}
+
 export function homePaths(home) {
   return {
     home,

@@ -64,6 +64,7 @@ test('loadMachineConfig is strict', () => {
     bad({ codex_exe: 'codex.exe' }, /codex_exe/);
     bad({ codex_prefix_args: [1] }, /codex_prefix_args/);
     bad({ worktree_root: 'rel' }, /worktree_root/);
+    bad({ playwright_dir: 'rel' }, /playwright_dir/);
     bad({ codex_home: 5 }, /codex_home/);
     bad({ project_docs: 'yes' }, /project_docs/);
     bad({ extra_path: ['rel'] }, /extra_path/);
@@ -122,6 +123,7 @@ test('addRepoAlias registers, updates and validates', () => {
 const fakeResolvers = {
   resolveCodexExe: (configured) => configured ?? 'C:\\fake\\codex.exe',
   defaultWorktreeRoot: () => 'C:\\hw\\wt',
+  defaultPlaywrightDir: () => 'C:\\hw\\ms-playwright',
 };
 
 test('buildRunConfig pins settings and clamps concurrency to the v1 maximum', () => {
@@ -130,6 +132,7 @@ test('buildRunConfig pins settings and clamps concurrency to the v1 maximum', ()
   assert.equal(rc.max_concurrency, 4);
   assert.equal(rc.codex_exe, 'C:\\fake\\codex.exe');
   assert.equal(rc.worktree_root, path.resolve('C:\\hw\\wt'));
+  assert.equal(rc.playwright_dir, path.resolve('C:\\hw\\ms-playwright'));
   assert.equal(rc.codex_home, null);
   assert.deepEqual(rc.extra_path, ['C:\\tools']);
   assert.equal(Object.keys(rc.presets).length, 5);
@@ -149,12 +152,14 @@ test('buildRunConfig uses configured paths and machine presets', () => {
     codex_exe: 'C:\\custom\\codex.exe',
     codex_home: 'C:\\ch',
     worktree_root: 'D:\\wt',
+    playwright_dir: 'D:\\pw',
     presets: { mine: { model: 'm', effort: 'low', sandbox: 'read-only' } },
   };
   const rc = buildRunConfig(machine, {}, fakeResolvers);
   assert.equal(rc.codex_exe, 'C:\\custom\\codex.exe');
   assert.equal(rc.codex_home, path.resolve('C:\\ch'));
   assert.equal(rc.worktree_root, path.resolve('D:\\wt'));
+  assert.equal(rc.playwright_dir, path.resolve('D:\\pw'));
   assert.equal(rc.presets.mine.model, 'm');
   assert.ok(rc.presets['sol-high-impl']);
 });
