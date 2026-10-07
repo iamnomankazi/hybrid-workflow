@@ -102,3 +102,7 @@ Known gaps: Codex's collaboration (sub-agent) tools stay in the worker tool tabl
 can fail with "Failed to write file" after long-lived shell sessions (workers fall back to shell
 writes, and patch capture is unaffected); no Playwright browser in workers (the sandbox user
 cannot read the user's AppData).
+
+## License
+
+MIT. See [LICENSE](LICENSE).
