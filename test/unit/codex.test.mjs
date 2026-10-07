@@ -5,8 +5,14 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   assertCleanEnv, assertSafeArgs, buildExecArgs, buildResumeArgs, buildWorkerEnv, codexVersion,
-  defaultCodexExe, dirHasAgentCli, resolveCodexExe,
+  defaultCodexExe, dirHasAgentCli, resolveCodexExe, unverifiedCodexWarning, VERIFIED_CODEX_VERSION,
 } from '../../src/codex.mjs';
+
+test('unverifiedCodexWarning is silent only for the verified Codex release', () => {
+  assert.equal(unverifiedCodexWarning(VERIFIED_CODEX_VERSION), null);
+  assert.match(unverifiedCodexWarning('codex-cli 0.161.0'), /codex-cli 0\.161\.0 is not codex-cli 0\.160\.1/);
+  assert.match(unverifiedCodexWarning('codex-cli 0.161.0'), /re-verify the worker tool table/);
+});
 
 const SESSION = '01a10f19-685d-7993-aaf0-7b528e9b4469';
 const base = { model: 'gpt-6.1-sol', effort: 'high', sandbox: 'workspace-write', lastMessageFile: 'C:\\a\\last.md' };

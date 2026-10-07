@@ -57,6 +57,9 @@ Uncaught errors: log to `runner.log`, set `runner.json.status = "crashed"`, rele
    1. `queued → launching`, create `attempts/<n>/` (must not contain `launch.json`).
    1b. Re-read the global Codex instructions fingerprint; if it differs from `run.json.global_instructions`,
       fail the job as `global_instructions_changed` (no worktree, no worker).
+   1c. Re-read `codex --version`; if it differs from `run.json.versions.codex`, fail the job as
+      `codex_version_changed` (no worktree, no worker). An unreadable version is logged and recorded
+      as `null`; the launch then fails on its own if Codex is unusable.
    2. Fresh: `git worktree add --detach` at `spec.base_commit ?? run.base_commit`, then repo
       preparation. Resume: the worktree must exist.
    3. Write `prompt.md` (composed capsule prompt or resume preamble) and record its sha256.

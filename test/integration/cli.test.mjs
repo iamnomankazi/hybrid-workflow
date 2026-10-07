@@ -154,10 +154,10 @@ describe('cli setup', () => {
     assert.match((await cli(['repo', 'list'])).stdout, /^proj /);
   });
 
-  test('doctor passes with the stub codex', async () => {
+  test('doctor passes with the stub codex and warns that its release is unverified', async () => {
     const r = await cli(['doctor']);
     assert.equal(r.code, 0, r.stdout);
-    assert.match(r.stdout, /ok\s+codex: .*codex-cli 0\.0\.0-stub/);
+    assert.match(r.stdout, /warn codex: .*codex-cli 0\.0\.0-stub.*is not codex-cli 0\.160\.1/);
     assert.match(r.stdout, /ok\s+powershell_cim/);
   });
 

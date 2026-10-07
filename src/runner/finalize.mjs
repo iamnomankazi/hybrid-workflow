@@ -293,7 +293,8 @@ export function buildResult({
       observed_isolation: observed?.isolation ?? null,
       global_instructions: launch?.global_instructions ?? null,
       codex_session_id: state.codex_session_id,
-      codex_version: run.versions?.codex ?? null,
+      // Per launch (null when unreadable); launch files written before it existed fall back to the run's.
+      codex_version: launch && 'codex_version' in launch ? launch.codex_version : run.versions?.codex ?? null,
       runner_version: HYBRID_VERSION,
       node_version: process.version,
       codex_exe: launch?.exe ?? null,

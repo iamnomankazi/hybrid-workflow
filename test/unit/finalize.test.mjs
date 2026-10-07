@@ -227,3 +227,17 @@ test('buildResult: a bare result for a job that never ran keeps the documented s
   assert.deepEqual(result.orphans, { killed: [], failed: [] });
   assert.equal(result.timestamps.ended_at, 'e');
 });
+
+test('buildResult: codex_version comes from the launch, null when it was unreadable', () => {
+  const state = {
+    run_id: 'r260101-000000-abcd', job_id: 'j1', submitted_epoch: 1, attempt: 1, queued_at: 'q', started_at: 's',
+    prompt_sha256: null, base_commit: 'b'.repeat(40), codex_session_id: null,
+  };
+  const args = {
+    run: { versions: { codex: 'codex-cli pinned' } }, spec: { preset: 'p', preset_config: { model: 'm', effort: 'low', sandbox: 'read-only' } },
+    state, outcome: { state: 'failed', reason: 'launch_failed', detail: null }, evidence: null, sweep: null, endedAt: 'e',
+  };
+  assert.equal(buildResult({ ...args, launch: { codex_version: 'codex-cli launched' } }).provenance.codex_version, 'codex-cli launched');
+  assert.equal(buildResult({ ...args, launch: { codex_version: null } }).provenance.codex_version, null);
+  assert.equal(buildResult({ ...args, launch: { exe: 'x' } }).provenance.codex_version, 'codex-cli pinned', 'older launch.json');
+});

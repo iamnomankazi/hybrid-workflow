@@ -3,7 +3,7 @@ import path from 'node:path';
 import { loadMachineConfig } from '../../config.mjs';
 import { defaultCodexHome } from '../../rollout.mjs';
 import { describeGlobalInstructions, readGlobalInstructions } from '../../instructions.mjs';
-import { resolveCodexExe, codexVersion } from '../../codex.mjs';
+import { resolveCodexExe, codexVersion, unverifiedCodexWarning } from '../../codex.mjs';
 import { resolveGitExe, gitVersion } from '../../git.mjs';
 import { homePaths, defaultWorktreeRoot } from '../../paths.mjs';
 import { ensureDir, randomHex } from '../../fsutil.mjs';
@@ -26,10 +26,14 @@ function gitCheck(home) {
   return { ok: true, detail: `${gitExe} (${version})` };
 }
 
+// Not a failure: a different release may work, but its worker tool table is unverified.
 function codexCheck(machine) {
   const exe = resolveCodexExe(machine.codex_exe);
   const version = codexVersion({ exe, prefixArgs: machine.codex_prefix_args });
-  return { ok: true, detail: `${exe} (${version})` };
+  const unverified = unverifiedCodexWarning(version);
+  return unverified
+    ? { ok: true, warn: true, detail: `${exe} (${version}): ${unverified}` }
+    : { ok: true, detail: `${exe} (${version})` };
 }
 
 function homeCheck(home) {

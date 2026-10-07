@@ -414,6 +414,26 @@ test('global Codex instructions are recorded per launch and a mid-run change ref
   }
 });
 
+test('the Codex version is recorded per launch and a version changed since run start refuses the launch', async () => {
+  const fx = await fixture();
+  fx.submit({ job_id: 'cv-ok' }, scenario('success'));
+  fx.startRunner();
+  const ok = await terminal(fx, 'cv-ok');
+  assert.equal(ok.state, 'completed', fx.diagnostics('cv-ok'));
+  assert.equal(readJson(fx.attempt('cv-ok').launch).codex_version, 'codex-cli 0.0.0-fake');
+  assert.equal(fx.readResult('cv-ok').provenance.codex_version, 'codex-cli 0.0.0-fake');
+
+  const pinnedElsewhere = await fixture({ runOverrides: { versions: { ...fx.run.versions, codex: 'codex-cli 0.0.0-pinned' } } });
+  pinnedElsewhere.submit({ job_id: 'cv-changed' }, scenario('success'));
+  pinnedElsewhere.startRunner();
+  const refused = await terminal(pinnedElsewhere, 'cv-changed');
+  assert.equal(refused.state, 'failed', pinnedElsewhere.diagnostics('cv-changed'));
+  assert.equal(refused.reason, 'codex_version_changed');
+  assert.match(refused.detail, /pinned codex-cli 0\.0\.0-pinned, now codex-cli 0\.0\.0-fake/);
+  assert.ok(!fs.existsSync(pinnedElsewhere.worktree('cv-changed')), 'no worktree is created for a refused launch');
+  assert.ok(!fs.existsSync(pinnedElsewhere.attempt('cv-changed').host), 'no worker is started');
+});
+
 test('launch failures: a missing Codex executable and an unusable base commit', async () => {
   const fx = await fixture({ configOverrides: { codex_exe: 'C:/hybrid-test-no-such-dir/codex.exe' } });
   fx.submit({ job_id: 'noexe' }, scenario('success'));

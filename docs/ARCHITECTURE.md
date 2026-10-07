@@ -213,6 +213,16 @@ by having a real worker enumerate its own tool table (`Object.keys(tools)` in it
 518 tool names without these flags, 17 with them, and no MCP servers. `apply_patch` still works.
 Re-verify on every Codex upgrade, because new default-on features would reach workers.
 
+The Codex desktop app updates `codex.exe` in place, so the verified release is pinned in code
+(`VERIFIED_CODEX_VERSION`) and guarded:
+
+* `doctor` and `run start` warn when `codex --version` is any other release.
+* `run start` records the version in `run.json.versions.codex`. Before every launch the runner
+  re-reads it, and a different version refuses the launch with `failed/codex_version_changed`,
+  before any worktree is created. An unreadable version is logged and left to the launch to fail.
+* `launch.json.codex_version` and `result.json.provenance.codex_version` record the version in
+  force for that attempt.
+
 The only way to exclude the global file would be a separate `CODEX_HOME`, which duplicates
 the rotating ChatGPT refresh token (logout races), so Hybrid does not do it. Instead
 (`src/instructions.mjs`):

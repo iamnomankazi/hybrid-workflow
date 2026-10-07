@@ -15,7 +15,7 @@ import {
   ensureDir, exists, fileSize, nowIso, readJson, readJsonlFrom, readText, sha256, sha256File, sleep,
   tryCreateLock, withRetry, writeFileExclusive, writeJsonAtomic,
 } from '../fsutil.mjs';
-import { buildExecArgs, buildResumeArgs, buildWorkerEnv } from '../codex.mjs';
+import { buildExecArgs, buildResumeArgs, buildWorkerEnv, codexVersion } from '../codex.mjs';
 import { composePrompt, composeResumePrompt } from '../spec.mjs';
 import * as git from '../git.mjs';
 import { areAlive, getIdentity, isAlive, killTree, ownIdentity, sweepOrphans } from '../proc.mjs';
@@ -876,6 +876,21 @@ export class Runner {
       ), { reason: 'global_instructions_changed' });
     }
 
+    // Worker isolation flags are verified per Codex release, and the desktop app updates codex.exe
+    // in place; run start pinned the version, so a different one refuses the launch. An unreadable
+    // version is recorded as null and left to the launch itself to fail.
+    let codexVersionNow = null;
+    try {
+      codexVersionNow = codexVersion({ exe: run.config.codex_exe, prefixArgs: run.config.codex_prefix_args });
+    } catch (err) {
+      this.log(`could not read the Codex version before launching ${job.id}: ${err.message}`);
+    }
+    if (codexVersionNow && run.versions?.codex && codexVersionNow !== run.versions.codex) {
+      throw Object.assign(new Error(
+        `Codex version changed since run start: pinned ${run.versions.codex}, now ${codexVersionNow}`,
+      ), { reason: 'codex_version_changed' });
+    }
+
     if (resume) {
       if (!exists(s.worktree)) throw new Error(`worktree missing for resume: ${s.worktree}`);
     } else {
@@ -916,6 +931,7 @@ export class Runner {
       attempt: s.attempt,
       mode: s.mode,
       exe: run.config.codex_exe,
+      codex_version: codexVersionNow,
       args: [...run.config.codex_prefix_args, ...args],
       cwd: s.worktree,
       env: workerEnv.env,

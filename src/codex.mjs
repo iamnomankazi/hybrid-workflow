@@ -83,6 +83,17 @@ export const WORKER_DISABLED_FEATURES = Object.freeze([
   'apps', 'plugins', 'remote_plugin', 'image_generation', 'goals',
 ]);
 
+// The Codex release whose worker tool table the list above was verified against (`codex
+// --version` output). The desktop app updates codex.exe in place, so `doctor` and `run start`
+// warn on any other release, and the runner refuses launches if the version changes mid-run.
+export const VERIFIED_CODEX_VERSION = 'codex-cli 0.160.1';
+
+export function unverifiedCodexWarning(version) {
+  return version === VERIFIED_CODEX_VERSION ? null
+    : `Codex ${version} is not ${VERIFIED_CODEX_VERSION}, the release whose worker tool isolation was verified; `
+      + 're-verify the worker tool table (docs/ARCHITECTURE.md §9) before relying on it';
+}
+
 // --ignore-user-config does not stop Codex from injecting the user's skills catalog from
 // CODEX_HOME; skills.include_instructions=false does (verified against 0.160.1 rollouts).
 function tailConfigArgs({ windowsSandbox, projectDocs }) {

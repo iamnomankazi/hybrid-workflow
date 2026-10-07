@@ -3,7 +3,7 @@ import path from 'node:path';
 import { HYBRID_VERSION, SCHEMAS, V1_MAX_CONCURRENCY } from '../../constants.mjs';
 import { homePaths, runPaths } from '../../paths.mjs';
 import { buildRunConfig, loadMachineConfig } from '../../config.mjs';
-import { codexVersion } from '../../codex.mjs';
+import { codexVersion, unverifiedCodexWarning } from '../../codex.mjs';
 import { defaultCodexHome } from '../../rollout.mjs';
 import { describeGlobalInstructions, readGlobalInstructions } from '../../instructions.mjs';
 import * as git from '../../git.mjs';
@@ -111,6 +111,9 @@ export const runStart = {
       git: git.gitVersion(ctx),
       codex: codexVersion({ exe: config.codex_exe, prefixArgs: config.codex_prefix_args }),
     };
+
+    const unverified = unverifiedCodexWarning(versions.codex);
+    if (unverified) c.warnings.push(`${unverified}; pinned for this run`);
 
     // Pinned so the runner can refuse launches if it changes mid-run (src/instructions.mjs).
     const globalInstructions = readGlobalInstructions(config.codex_home ?? defaultCodexHome());
