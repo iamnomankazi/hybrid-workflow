@@ -14,9 +14,10 @@ Opus (Claude Code) ──hybrid CLI──▶ files (run.json, inbox/, jobs/) ◀
 
 ## Status
 
-v0.1: deterministic foundation. Unit- and integration-tested with a fake Codex; the real
-Codex path has had a short smoke validation only. See "Validation status" below before relying
-on it for long unattended runs.
+v0.1. Unit- and integration-tested with a fake Codex. Acceptance-tested with real Codex 0.160.1
+workers on Windows (October 2026): parallel 90+ minute runs, Claude app quit, runner crash and
+adoption, cancellation, resume, patch rules, sandbox and environment isolation, and epoch
+fencing. See "Validation status" for what is proven and what is not.
 
 ## Requirements
 
@@ -78,10 +79,26 @@ npm run test:integration # spawns real processes (git, PowerShell CIM, WMI) with
 
 | Area | Status |
 | --- | --- |
-| Native Codex with clean isolation flags (Sol High, Luna XHigh, subscription auth) | Proven experimentally (Test 1) |
-| Runner survives full Claude Desktop quit when launched via WMI | Proven experimentally (Test 2) |
 | Core persistence, state machine, specs, env sanitization, scope validation | Unit-tested |
 | Worktrees, patch capture (untracked, binary, deletions), junction safety | Integration-tested (real git) |
 | Process identity, tree kill, orphan sweep, WMI launch | Integration-tested (real processes) |
-| Runner lifecycle, cancel, timeout, stall, crash adoption, resume, holds | Integration-tested with a fake Codex |
-| Long duration, quota behaviour, auth refresh races, sleep, RoleForge worktrees | Awaiting acceptance testing |
+| Runner lifecycle, cancel, timeout, stall, crash adoption, resume, holds, epoch fencing | Integration-tested with a fake Codex |
+| Native Codex (Sol, Luna) with pinned model, effort, sandbox and approval; observed config matches the request | Acceptance-tested on every real job |
+| Runner and workers survive a full Claude desktop quit (WMI launch) | Acceptance-tested |
+| Two parallel 90+ minute workers with sparse `hybrid wait` wakes | Acceptance-tested (~98 min) |
+| Writes outside the worktree, network, `npm install` blocked without hanging; no approval prompts | Acceptance-tested; read access is broad |
+| Worker environment: no `OPENAI_*`/`CLAUDE*`, no `codex`/`claude` on `PATH` | Acceptance-tested |
+| Patch rules: hooks, symlinks/junctions, protected paths, write scope | Acceptance-tested |
+| Cancel of a real cross-user process tree, no orphans, patch captured | Acceptance-tested |
+| Runner crash: worker survives and is adopted once, or marked interrupted | Acceptance-tested |
+| Manual resume: same session, pinned flags, worker re-inspects first | Acceptance-tested |
+| Stale-epoch submit/cancel rejected at the CLI and by the runner | Acceptance-tested |
+| Worker tool isolation (no account connectors, plugins, web access) | Acceptance-tested (tool table enumerated) |
+| Quota consumption | Measured briefly; the real usage-limit → `paused_quota` path has not been observed |
+| Auth refresh races | Not tested |
+| Sleep | Not tested. Run on AC with system sleep disabled; there is no keep-awake in Hybrid |
+
+Known gaps: Codex's collaboration (sub-agent) tools stay in the worker tool table; `apply_patch`
+can fail with "Failed to write file" after long-lived shell sessions (workers fall back to shell
+writes, and patch capture is unaffected); no Playwright browser in workers (the sandbox user
+cannot read the user's AppData).

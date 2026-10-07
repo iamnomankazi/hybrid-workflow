@@ -200,18 +200,18 @@ content from `CODEX_HOME` and the signed-in account (verified from session rollo
 | --- | --- | --- |
 | Project `AGENTS.md` in the worktree | `project_doc_max_bytes=0` | Suppressed. Capsules carry all task context |
 | User skills catalog (`<skills_instructions>`) | `skills.include_instructions=false` | Suppressed |
-| Account apps: the `codex_apps` MCP server (lazily loaded tools including `codexless.codex.command_exec` with `access: "inherit"`) | `features.apps=false` | Disabled. Found in acceptance Test 12, where only `approval_policy="never"` refused the call |
+| Account apps: the `codex_apps` MCP server (hundreds of connector tools acting on the signed-in account, e.g. mail, GitHub, Drive, plus `codexless.codex.command_exec` with `access: "inherit"`) | `features.apps=false` | Disabled. A worker did call `command_exec`; only `approval_policy="never"` refused it |
 | Remote plugin MCP servers (e.g. `codex_security`, 23 tools) | `features.plugins=false`, `features.remote_plugin=false` | Disabled |
 | Web access tool (`web__run`) | `web_search="disabled"` | Disabled |
 | `image_gen` and goal tools | `features.image_generation=false`, `features.goals=false` | Disabled |
 | Collaboration tools (`spawn_agent`, `send_message`, `followup_task`, `wait_agent`, `list_agents`, `interrupt_agent`) | **None verified.** `features.multi_agent=false` and `features.multi_agent_v2=false` left them in the tool table | **Known limitation.** Still exposed. No worker has called them |
-
-All of these features are stable and on by default in 0.160.1, and none runs inside the worker's
-sandboxed shell. The list lives in `WORKER_DISABLED_FEATURES` (`src/codex.mjs`). It was verified
-from a worker's own tool table (`Object.keys(tools)`) in acceptance run `test-f1-apps`, where
-`apply_patch` was confirmed to still work. Re-verify it on every Codex upgrade, because new
-default-on features would reach workers.
 | Global `<CODEX_HOME>/AGENTS.override.md`, else `<CODEX_HOME>/AGENTS.md` | **None exists.** `instructions` is additive; no flag or feature disables it | **Known limitation.** Pinned and recorded (below) |
+
+The features above are stable and on by default in 0.160.1, and none runs inside the worker's
+sandboxed shell. The list lives in `WORKER_DISABLED_FEATURES` (`src/codex.mjs`). It was verified
+by having a real worker enumerate its own tool table (`Object.keys(tools)` in its code cell):
+518 tool names without these flags, 17 with them, and no MCP servers. `apply_patch` still works.
+Re-verify on every Codex upgrade, because new default-on features would reach workers.
 
 The only way to exclude the global file would be a separate `CODEX_HOME`, which duplicates
 the rotating ChatGPT refresh token (logout races), so Hybrid does not do it. Instead

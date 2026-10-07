@@ -22,8 +22,8 @@ epoch is accepted (it guards against stale controllers, not impersonation; ARCHI
 | `takeover [--session S]` | owner | Increment the epoch and become owner |
 | `submit <spec.json> --epoch N [--no-wait]` | yes | Validate, store spec + capsule, queue the job |
 | `status [<job>] [--changed [--since N]]` | cursor only | Run/job summary; `--changed` = transitions since the session cursor |
-| `wait [--any] [--since N] [--timeout 50m] [--debounce 60s]` | — | Block until a wake transition (batched for `--debounce`; `--any` returns at the first), `runner_down`, `idle` (nothing launchable or active) or timeout |
-| `result <job> [--json]` | — | Outcome, worker report (≤16 KB), patch verdict and provenance |
+| `wait [--any] [--since N] [--timeout 50m] [--debounce 60s] [--poll 2s]` | — | Block until a wake transition (batched for `--debounce`; `--any` returns at the first), `runner_down`, `idle` (nothing launchable or active) or timeout; `--poll` sets how often the feed is re-read |
+| `result <job> [--full]` | — | Outcome, worker report, patch verdict and provenance; `WARNING isolation:` (JSON `isolation_warnings`) if the worker made MCP calls or saw `codex_apps` or a skills catalog. `--full` shows report fields untruncated, the raw report (≤16 KB) and every patch file (default: first 50) |
 | `cancel <job> --epoch N` | yes | Cancel a queued or active job (tree kill + orphan sweep + patch capture) |
 | `resume <job> --epoch N [--note <text> \| --note-file <f>]` | yes | Queue a new attempt of the same Codex session with pinned flags |
 | `decide <job> <integrated\|rejected\|superseded\|deferred> --epoch N [--note]` | yes | Record Opus's integration decision |
