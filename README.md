@@ -1,36 +1,40 @@
 # Hybrid Workflow
 
-**Use Claude Pro and ChatGPT Plus together as one coordinated engineering workflow.**
+**Use Claude Pro and ChatGPT Plus together in one engineering workflow.**
 
-Hybrid Workflow lets a native Claude Code session, usually running Opus, act as the planner and
-reviewer for a project, while native Codex workers (`codex exec`, with models such as Luna and
-Sol) do the execution-heavy work in parallel. Both tools stay in their official harnesses and
-use their normal subscription sign-in. Hybrid requires no model API keys or per-token API
-billing for the normal workflow.
+Claude Code (Opus) leads: it plans work, delegates bounded jobs, reviews results and integrates
+accepted changes. Native Codex CLI workers (Sol and Luna) handle parallel implementation,
+exploration and review in isolated Git worktrees. Opus can also use Haiku and Sonnet subagents
+for short Claude-side tasks.
 
-Claude Pro and ChatGPT Plus are metered separately, so a run can draw on both usage pools at
-once. Hybrid does not merge, transfer or bypass either provider's limits; it only coordinates the
-two. The workflow keeps Claude focused on planning, review and integration and gives the
-execution-heavy work to Codex.
+When Claude usage runs low, Opus can hand an active run to a **temporary, sandboxed Sol XHigh
+controller**. Sol continues with the same jobs, state and integration branch; Opus can take
+ownership back later. The runner is a deterministic process manager, never an AI orchestrator.
 
-Windows only (v0.1). MIT licensed.
+Both harnesses use their own subscription sign-in, with no model API keys or per-token API
+billing required for normal use. Claude Pro and ChatGPT Plus have separate usage limits;
+Hybrid coordinates them without combining or bypassing those limits.
 
-```text
-        Claude Code (Opus)  ── plan · decompose · review · integrate
-                │
-                │  hybrid CLI
-                ▼
-        run state on disk (run.json, jobs/, transitions.jsonl)
-                │
-          per-run runner  ── launches, watches and records workers; no LLM
-          ┌─────┼─────┐
-          ▼     ▼     ▼
-        Codex Codex Codex   (4 at once by default, up to 8; each in its own git worktree)
-```
+Windows only. MIT licensed.
 
-Opus submits bounded jobs, then sleeps on `hybrid wait` instead of polling. It wakes when a job
-finishes or needs attention, reviews the result, integrates or rejects it, and waits again.
-Workers never commit; Opus integrates on a separate branch, and you decide what reaches `main`.
+## Workflow architecture
+
+![Hybrid Workflow overview](docs/workflow_overview.svg)
+
+Opus plans and delegates jobs through Hybrid. The runner launches Codex workers in isolated Git
+worktrees, captures and validates their results, and returns them to Opus for review and
+integration. You approve anything that reaches `main`. When Claude's quota is running low,
+Opus can hand the **same run** to a sandboxed Sol XHigh controller and take it back later.
+
+## Model topology
+
+![Hybrid Workflow model roles](docs/model_roles.svg)
+
+The limits shown are **ceilings, not targets**. Opus selects the workers required for each
+task; Claude subagents are optional. See [Choosing agents and concurrency](#choosing-agents-and-concurrency)
+and [Controller handoff](#controller-handoff-opus-to-sol-and-back).
+
+---
 
 ## Quick start
 
@@ -120,8 +124,55 @@ configurable.
    protected paths (`.git`, git hooks, `.github/workflows`, `AGENTS.md`, `CLAUDE.md`, `.claude/`,
    `.codex/`, …), symlinks, gitlinks and NTFS junctions. The verdict is `clean`, `violations`,
    `empty` or `capture_failed`; only `clean` patches may be integrated.
-6. **Review and integrate.** Opus wakes, reads the result, and applies clean patches to an
-   integration branch (`hybrid/<run_id>`) with git hooks disabled. You merge that branch.
+6. **Review and integrate.** The current controller reads results and applies clean patches to
+   an integration branch (`hybrid/<run_id>`) with git hooks disabled. You decide what gets merged.
+
+## Choosing agents and concurrency
+
+Each run starts with a limit of **4 concurrent Codex workers**. Use
+`run start --concurrency 8` to allow up to **8**, shared across Sol and Luna presets.
+These are ceilings, not targets: Opus chooses how many jobs to submit and which preset fits each
+job. Use higher concurrency for independent, lighter work; use fewer workers for parallel builds,
+full test suites or browser tasks on machines with limited CPU and RAM.
+
+| Agent | Typical role | Capacity |
+| --- | --- | --- |
+| Opus (Claude Code) | Primary planning, decisions and integration | One run controller |
+| Codex Luna XHigh (`luna-xhigh-impl`) | Implementation and exploration | Shares up to 8 Codex slots |
+| Codex Sol High / XHigh (`sol-high-impl`, `sol-xhigh-impl`) | Reasoning-heavy implementation | Same 8 slots |
+| Codex Sol High (`sol-high-review`) | Default independent review | Same 8 slots |
+| Claude Haiku 5.5 | Short research, scanning and first-pass checks | Up to 2 subagents |
+| Claude Sonnet 5.5 | Difficult reviews and capsule drafting, when useful | Up to 2 subagents |
+
+Haiku and Sonnet subagents use Claude Code's native Agent tool, **not** Hybrid worker slots.
+They are read-only or work in their own isolated worktrees, never in the main checkout or
+integration worktree. They share Opus's Claude Pro allowance and must finish before a controller handoff. The
+two-per-model limits are orchestration rules, not a separate scheduler. Eight Codex workers
+were smoke-tested concurrently with mostly idle tasks; heavy-workload throughput depends on
+the machine and the available ChatGPT usage window.
+
+## Controller handoff: Opus to Sol and back
+
+If substantial work remains as Claude's usage window runs low, Opus can deliberately hand
+control to **GPT-6.1 Sol XHigh** instead of leaving the run idle. At a clean boundary, it
+records the current decisions, integration branch and exact next action in `plan.md`, then runs:
+
+```bash
+hybrid controller start --epoch N --json
+```
+
+Hybrid launches a separate, sandboxed Sol controller and keeps the existing runner available
+through a host running as the Windows user. Sol reads `plan.md` and the run state, calls
+`hybrid takeover` to obtain the next epoch, and continues using the same CLI, jobs and
+integration worktree. This controller is separate from the ordinary restricted workers;
+its writable paths are limited to the run, the repository's Git directory and designated
+integration worktrees. It must never merge to `main` or push; those decisions stay with you.
+
+When Claude becomes available, Opus reads `plan.md`, `hybrid status`, results and Git state
+**from disk**, then calls `hybrid takeover` (without `--epoch`). The previous epoch is fenced
+so the old controller cannot keep mutating the run. The handoff requires a clean checkpoint;
+there is no automatic quota detector, second run or parallel controlling session. See
+[Controller handoff](docs/ORCHESTRATION.md#controller-handoff) for the boundary and recovery rules.
 
 ## Worker capabilities
 
@@ -155,18 +206,16 @@ instructions. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - **The runner can crash.** Workers keep running under their job hosts. A restarted runner
   adopts a worker only if PID and process start time both match; anything uncertain becomes
   `interrupted`. Nothing is resumed automatically.
-- **Opus can hand off.** When Claude's window runs low with work remaining, Opus reaches a clean
-  boundary, updates `plan.md` and runs `hybrid controller start`. A temporary Sol (`xhigh`)
-  controller takes over the run through the normal epoch takeover and continues under the same
-  contract, in a workspace-write sandbox limited to the run, the repository's git directory and
-  the integration worktree. Opus later takes it back the same way. See
-  [docs/ORCHESTRATION.md](docs/ORCHESTRATION.md) "Controller handoff".
+- **Control survives Claude quota gaps.** At a clean checkpoint, Opus can hand the same run
+  to a sandboxed Sol XHigh controller. The normal-user host keeps the runner available, and
+  Opus can take ownership back from disk. See [Controller handoff](#controller-handoff-opus-to-sol-and-back).
 - **Stale controllers are fenced.** Every mutating command carries the run's epoch, checked by
   the CLI and again by the runner. `hybrid takeover` increments the epoch, after which commands
   carrying the previous epoch are rejected. This guards against an old session acting on stale
   state; it is not an authentication boundary.
-- **No daemon.** Each run starts a small runner through Windows WMI. It exits when the run goes
-  idle. There is no service, scheduled task, server or hidden LLM process.
+- **No permanent service.** A runner starts on demand through Windows WMI and exits when idle.
+  A temporary handoff also runs a detached controller host while Sol is active; no always-on
+  daemon, server or scheduled task is installed.
 
 ## Validation status
 
@@ -176,7 +225,8 @@ instructions. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 | Worktrees, patch capture, process identity, WMI launch and runner lifecycle | Integration-tested |
 | Sol and Luna workers; observed model, effort, sandbox and approval match the request | Acceptance-tested (Codex 0.160.1) |
 | Four concurrent workers; two parallel workers for 90+ minutes | Acceptance-tested |
-| Eight concurrent workers (`--concurrency 8`, light jobs) | Smoke-tested |
+| Eight concurrent workers (`--concurrency 8`, light jobs) | Smoke-tested (94 seconds of overlap) |
+| Sol controller takeover, real worker integration, long wait, Opus handback and stale-epoch fencing | Acceptance-tested |
 | Claude fully quit while workers continue | Acceptance-tested |
 | Runner crash and adoption; cancellation with no orphaned processes; manual resume | Acceptance-tested |
 | Patch rules: write scope, protected paths, hooks and junctions | Acceptance-tested |
@@ -228,7 +278,7 @@ The project has no npm dependencies.
 
 It is not an API proxy. It does not combine credentials, move quota between providers, bypass
 limits or emulate either provider's API. The runner manages processes and evidence and makes no
-decisions; Opus orchestrates; you have the final say.
+decisions; Opus (or temporary Sol) orchestrates; you have the final say.
 
 ## License
 
