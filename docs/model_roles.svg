@@ -1,1 +1,53 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1700" height="760" viewBox="0 0 1700 760"><rect x="0" y="0" width="1700" height="760" rx="0" fill="#f8fafc" stroke="none" stroke-width="2"/><rect x="0" y="0" width="1700" height="10" rx="0" fill="#2563eb" stroke="none" stroke-width="2"/><text x="80" y="94" fill="#0f172a" font-family="Segoe UI,Arial,sans-serif" font-size="47" font-weight="700" text-anchor="start">Models and responsibilities</text><text x="80" y="143" fill="#64748b" font-family="Segoe UI,Arial,sans-serif" font-size="24" font-weight="400" text-anchor="start">Opus chooses the workers. Limits are ceilings, never targets.</text><rect x="80" y="195" width="750" height="470" rx="22" fill="#ffffff" stroke="#ddd6fe" stroke-width="2"/><rect x="870" y="195" width="750" height="470" rx="22" fill="#ffffff" stroke="#bfdbfe" stroke-width="2"/><rect x="80" y="195" width="750" height="73" rx="20" fill="#ede9fe" stroke="none" stroke-width="2"/><rect x="870" y="195" width="750" height="73" rx="20" fill="#dbeafe" stroke="none" stroke-width="2"/><text x="114" y="242" fill="#6d28d9" font-family="Segoe UI,Arial,sans-serif" font-size="29" font-weight="700" text-anchor="start">CLAUDE PRO</text><text x="904" y="242" fill="#1d4ed8" font-family="Segoe UI,Arial,sans-serif" font-size="29" font-weight="700" text-anchor="start">CHATGPT PLUS / CODEX</text><rect x="112" y="301" width="684" height="122" rx="14" fill="#faf5ff" stroke="#e9d5ff" stroke-width="2"/><text x="142" y="347" fill="#4c1d95" font-family="Segoe UI,Arial,sans-serif" font-size="29" font-weight="700" text-anchor="start">Opus 5.5</text><text x="142" y="383" fill="#5b5670" font-family="Segoe UI,Arial,sans-serif" font-size="20" font-weight="400" text-anchor="start">Primary controller: plans, reviews, integrates</text><rect x="112" y="447" width="328" height="165" rx="14" fill="#ffffff" stroke="#e9d5ff" stroke-width="2"/><rect x="460" y="447" width="336" height="165" rx="14" fill="#ffffff" stroke="#e9d5ff" stroke-width="2"/><text x="136" y="497" fill="#4c1d95" font-family="Segoe UI,Arial,sans-serif" font-size="25" font-weight="700" text-anchor="start">Haiku 5.5</text><text x="136" y="534" fill="#6d28d9" font-family="Segoe UI,Arial,sans-serif" font-size="19" font-weight="400" text-anchor="start">Up to 2</text><text x="136" y="565" fill="#475569" font-family="Segoe UI,Arial,sans-serif" font-size="18" font-weight="400" text-anchor="start">Research and scanning</text><text x="483" y="497" fill="#4c1d95" font-family="Segoe UI,Arial,sans-serif" font-size="25" font-weight="700" text-anchor="start">Sonnet 5.5</text><text x="483" y="534" fill="#6d28d9" font-family="Segoe UI,Arial,sans-serif" font-size="19" font-weight="400" text-anchor="start">Up to 2</text><text x="483" y="565" fill="#475569" font-family="Segoe UI,Arial,sans-serif" font-size="18" font-weight="400" text-anchor="start">Difficult reviews</text><rect x="902" y="301" width="336" height="233" rx="14" fill="#f8fafc" stroke="#bfdbfe" stroke-width="2"/><rect x="1258" y="301" width="328" height="233" rx="14" fill="#f8fafc" stroke="#bfdbfe" stroke-width="2"/><text x="927" y="349" fill="#1d4ed8" font-family="Segoe UI,Arial,sans-serif" font-size="25" font-weight="700" text-anchor="start">Luna XHigh</text><text x="927" y="387" fill="#182236" font-family="Segoe UI,Arial,sans-serif" font-size="21" font-weight="400" text-anchor="start">Implementation</text><text x="927" y="421" fill="#182236" font-family="Segoe UI,Arial,sans-serif" font-size="21" font-weight="400" text-anchor="start">Exploration</text><text x="927" y="494" fill="#64748b" font-family="Segoe UI,Arial,sans-serif" font-size="18" font-weight="400" text-anchor="start">Shared pool: 4 default</text><text x="1283" y="349" fill="#1d4ed8" font-family="Segoe UI,Arial,sans-serif" font-size="25" font-weight="700" text-anchor="start">Sol High / XHigh</text><text x="1283" y="387" fill="#182236" font-family="Segoe UI,Arial,sans-serif" font-size="20" font-weight="400" text-anchor="start">Reasoning and coding</text><text x="1283" y="421" fill="#182236" font-family="Segoe UI,Arial,sans-serif" font-size="20" font-weight="400" text-anchor="start">Independent review</text><text x="1283" y="494" fill="#64748b" font-family="Segoe UI,Arial,sans-serif" font-size="18" font-weight="400" text-anchor="start">Up to 8 workers total</text><rect x="902" y="554" width="684" height="79" rx="14" fill="#eff6ff" stroke="#bfdbfe" stroke-width="2"/><text x="927" y="588" fill="#1d4ed8" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="650" text-anchor="start">Temporary Sol XHigh controller</text><text x="927" y="617" fill="#475569" font-family="Segoe UI,Arial,sans-serif" font-size="17" font-weight="400" text-anchor="start">Only when Opus hands off the run</text><text x="80" y="716" fill="#475569" font-family="Segoe UI,Arial,sans-serif" font-size="21" font-weight="600" text-anchor="start">Human approval remains required before anything reaches main.</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="610" viewBox="0 0 1200 610" role="img" aria-labelledby="roles-title roles-desc">
+  <title id="roles-title">Hybrid Workflow models and responsibilities</title>
+  <desc id="roles-desc">Claude Pro side: Opus 5.5 is the controller that plans, reviews and integrates; optional Haiku 5.5 and Sonnet 5.5 subagents, up to two each. ChatGPT Plus / Codex side: Luna XHigh workers for implementation and exploration, Sol High or XHigh workers for harder reasoning, coding and review, sharing one pool of four workers by default and up to eight; a temporary Sol XHigh controller runs only when Opus hands off the run. The user approves anything that reaches main.</desc>
+  <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Segoe UI Symbol', Helvetica, Arial, 'DejaVu Sans', sans-serif">
+    <!-- Same surface, type scale and palette as workflow_overview.svg. -->
+    <rect x="1" y="1" width="1198" height="608" rx="19" fill="#fbfcfe" stroke="#e0e5ea" stroke-width="1.5"/>
+    <text x="64" y="81" font-size="33" font-weight="700" fill="#1e2b38" letter-spacing="-0.65">Models and responsibilities</text>
+    <text x="64" y="116" font-size="16.5" fill="#536474">The controller chooses the workers.</text>
+
+    <!-- Claude Pro. -->
+    <rect x="64" y="150" width="520" height="376" rx="10" fill="#ffffff" stroke="#dce3ea" stroke-width="1.5"/>
+    <rect x="64" y="162" width="4" height="352" rx="2" fill="#55758d"/>
+    <text x="96" y="194" font-size="17" font-weight="700" letter-spacing="1.5" fill="#506d83">CLAUDE PRO</text>
+
+    <text x="96" y="244" font-size="22" font-weight="650" fill="#1c2c3a">Opus 5.5</text>
+    <text x="96" y="272" font-size="16.5" fill="#536474">Controller: plans, reviews, integrates</text>
+    <path d="M96 296 H552" stroke="#e2e7ec" stroke-width="1.5"/>
+
+    <text x="96" y="332" font-size="22" font-weight="650" fill="#1c2c3a">Haiku 5.5</text>
+    <text x="552" y="332" font-size="15" text-anchor="end" fill="#6a7885">up to 2</text>
+    <text x="96" y="360" font-size="16.5" fill="#536474">Research and scanning</text>
+    <path d="M96 384 H552" stroke="#e2e7ec" stroke-width="1.5"/>
+
+    <text x="96" y="420" font-size="22" font-weight="650" fill="#1c2c3a">Sonnet 5.5</text>
+    <text x="552" y="420" font-size="15" text-anchor="end" fill="#6a7885">up to 2</text>
+    <text x="96" y="448" font-size="16.5" fill="#536474">Difficult reviews</text>
+
+    <text x="96" y="496" font-size="14.5" fill="#6a7885">Subagents are optional and use Opus's Claude usage.</text>
+
+    <!-- ChatGPT Plus / Codex. -->
+    <rect x="616" y="150" width="520" height="376" rx="10" fill="#ffffff" stroke="#cbded7" stroke-width="1.5"/>
+    <rect x="616" y="162" width="4" height="352" rx="2" fill="#37846e"/>
+    <text x="648" y="194" font-size="17" font-weight="700" letter-spacing="1.5" fill="#317a67">CHATGPT PLUS · CODEX</text>
+
+    <text x="648" y="244" font-size="22" font-weight="650" fill="#1c2c3a">Luna XHigh</text>
+    <text x="648" y="272" font-size="16.5" fill="#536474">Implementation and exploration</text>
+    <path d="M648 296 H1104" stroke="#e2e7ec" stroke-width="1.5"/>
+
+    <text x="648" y="332" font-size="22" font-weight="650" fill="#1c2c3a">Sol High / XHigh</text>
+    <text x="648" y="360" font-size="16.5" fill="#536474">Harder reasoning, coding and independent review</text>
+    <path d="M648 384 H1104" stroke="#e2e7ec" stroke-width="1.5"/>
+
+    <!-- One shared pool for both worker models. -->
+    <text x="648" y="420" font-size="16.5" font-weight="600" fill="#317a67">Shared pool for Luna and Sol: 4 by default, up to 8</text>
+
+    <!-- Secondary: the temporary controller is not a worker. -->
+    <path d="M648 448 H1104" fill="none" stroke="#c6d2dc" stroke-width="1.5" stroke-dasharray="3 5"/>
+    <text x="648" y="478" font-size="15.5" font-weight="600" fill="#536a7a">Temporary Sol XHigh controller</text>
+    <text x="648" y="502" font-size="14.5" fill="#617585">Only when Opus hands off the run; hands it back later</text>
+
+    <text x="64" y="568" font-size="15.5" font-weight="600" fill="#536474">User approves anything that reaches main.</text>
+  </g>
+</svg>
