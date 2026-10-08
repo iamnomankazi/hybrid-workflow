@@ -7,8 +7,9 @@ below is Opus's.
 ## Division of labour
 
 * **Opus**: goal, decomposition, capsules, preset choice, review, integration, decisions.
-* **Claude-side Sonnet subagents**: short bounded Claude work inside this session, chosen by
-  Opus. Not managed by the runner; if the session dies, that work dies (acceptable).
+* **Claude subagents** (Haiku 5.5, Sonnet 5.5): short bounded Claude work inside this session,
+  launched by Opus with Claude Code's Agent tool (see "Claude subagents" below). Not managed by
+  the runner; if the session dies, that work dies (acceptable).
 * **Runner (`hybrid`)**: Codex lifecycle only. It never reads `plan.md`.
 * **Codex Sol/Luna** (`codex exec`): bulk execution, exploration and default reviewing.
 * **Human**: final authority. Merges to main. Nothing in Hybrid Workflow pushes.
@@ -26,7 +27,9 @@ below is Opus's.
 5. Never apply a patch whose verdict is not `clean`. Never apply with hooks enabled.
 6. Never resume after a reboot or crash without reading the job's result first. Nothing
    resumes automatically.
-7. One active run per machine; at most 4 concurrent Codex workers in v1.
+7. One active run per machine; at most 8 concurrent Codex workers (default 4; see
+   "Choosing concurrency"). At most 2 Haiku and 2 Sonnet subagents at a time, and they never
+   write to the integration worktree.
 
 ## Starting a run
 
@@ -35,6 +38,22 @@ hybrid doctor
 hybrid repo add myrepo C:\path\to\repo          # once per machine
 hybrid run start --repo myrepo --goal "<one line>" --json
 ```
+
+### Choosing concurrency
+
+Runs default to 4 concurrent workers; `run start --concurrency <n>` allows up to 8. The limit
+is pinned for the run. These are ceilings, not targets: use fewer, or none, when the work does
+not split.
+
+* Go above 4 only for jobs that are light on CPU and memory (edits, reviews, exploration) and
+  have disjoint write scopes. Parallel jobs that touch the same files only create conflicts.
+* Keep heavy jobs (full test suites, builds, browser work) at 4 or fewer on a laptop-class
+  machine: they compete for CPU and RAM, and slow jobs hit timeouts or stall detection.
+  Measured on a 4-core/16 GB laptop (2026-10-08): 8 workers that mostly wait cost about
+  770 MB of `codex.exe` memory in total, and launching 8 at once briefly saturates the CPU;
+  what the workers themselves run is the real cost.
+* Eight workers draw on the ChatGPT window about twice as fast as four. If a job ends
+  `paused_quota`, the launch hold applies to the whole run (see Handling outcomes).
 
 Record `run_id`, `epoch` and `base_commit`. Immediately fill `plan.md` in the run directory
 (path printed by `run start`): goal, decomposition, decisions, job table, integration log,
@@ -64,10 +83,30 @@ Workers run with `--ignore-user-config`, `--ignore-rules` and project docs disab
 
 Keep capsules bounded: one coherent change per job, write scope as narrow as possible.
 
-Preset guidance: `luna-xhigh-impl` for substantial implementation, `sol-high-impl` for
-moderate implementation, `sol-high-review` as the default reviewer (including of
-Claude-authored work), `luna-xhigh-review` for deep audits, `sol-low-smoke` only for
-plumbing tests. Use a Sonnet review only for high-risk diffs (security, core architecture).
+Preset guidance: `luna-xhigh-impl` for substantial implementation and exploration,
+`sol-high-impl` for moderate implementation, `sol-xhigh-impl` for implementation that needs
+harder reasoning, `sol-high-review` as the default reviewer (including of Claude-authored
+work), `luna-xhigh-review` for deep audits, `sol-low-smoke` only for plumbing tests. Use a
+Sonnet review only for high-risk diffs (security, core architecture).
+
+## Claude subagents
+
+Opus may delegate short, bounded Claude work with Claude Code's Agent tool (`model: "haiku"`
+or `model: "sonnet"`); nothing else is needed. These are ceilings, not targets:
+
+* **Haiku 5.5, at most 2 at a time:** scanning, searching, summarising, first-pass checks.
+* **Sonnet 5.5, at most 2 at a time:** work that needs more judgment, such as a second review of
+  a high-risk diff or drafting a difficult capsule.
+
+Rules:
+* Subagents are read-only, or they write only in their own isolated worktree (the Agent tool's
+  `isolation: "worktree"`). Never let one write to the integration worktree or the repository
+  checkout: Opus alone integrates.
+* They share the Claude window with Opus, which is the binding constraint. Prefer a Codex
+  worker for anything large; prefer Haiku over Sonnet where it is good enough.
+* They live in this session. Finish or abandon their work before a controller handoff; the
+  temporary controller does not inherit them.
+* Their output is data, like a worker's: verify it before acting on it.
 
 ## The sparse wake loop
 

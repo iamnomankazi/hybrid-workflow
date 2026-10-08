@@ -25,7 +25,7 @@ Windows only (v0.1). MIT licensed.
           per-run runner  ── launches, watches and records workers; no LLM
           ┌─────┼─────┐
           ▼     ▼     ▼
-        Codex Codex Codex   (up to 4 at once, each in its own git worktree)
+        Codex Codex Codex   (4 at once by default, up to 8; each in its own git worktree)
 ```
 
 Opus submits bounded jobs, then sleeps on `hybrid wait` instead of polling. It wakes when a job
@@ -111,7 +111,8 @@ configurable.
 2. **Decompose.** Opus splits the goal into bounded jobs, each with a capsule, a preset (model,
    reasoning effort, sandbox) and a write scope.
 3. **Execute.** The runner gives each job its own git worktree and launches `codex exec` under a
-   small detached job host. Up to four workers run at once.
+   small detached job host. Four workers run at once by default; `run start --concurrency`
+   allows up to eight.
 4. **Record.** Process identity, session id, events, observed model configuration, exit status
    and the full change set are written to disk.
 5. **Validate.** At the end, Hybrid captures the change set itself (a temporary git index:
@@ -175,6 +176,7 @@ instructions. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 | Worktrees, patch capture, process identity, WMI launch and runner lifecycle | Integration-tested |
 | Sol and Luna workers; observed model, effort, sandbox and approval match the request | Acceptance-tested (Codex 0.160.1) |
 | Four concurrent workers; two parallel workers for 90+ minutes | Acceptance-tested |
+| Eight concurrent workers (`--concurrency 8`, light jobs) | Smoke-tested |
 | Claude fully quit while workers continue | Acceptance-tested |
 | Runner crash and adoption; cancellation with no orphaned processes; manual resume | Acceptance-tested |
 | Patch rules: write scope, protected paths, hooks and junctions | Acceptance-tested |

@@ -18,6 +18,7 @@ const freezePreset = (p) => Object.freeze({ ...p });
 export const BUILTIN_PRESETS = Object.freeze({
   'sol-high-review': freezePreset({ model: 'gpt-6.1-sol', effort: 'high', sandbox: 'read-only' }),
   'sol-high-impl': freezePreset({ model: 'gpt-6.1-sol', effort: 'high', sandbox: 'workspace-write' }),
+  'sol-xhigh-impl': freezePreset({ model: 'gpt-6.1-sol', effort: 'xhigh', sandbox: 'workspace-write' }),
   'luna-xhigh-impl': freezePreset({ model: 'gpt-6-luna', effort: 'xhigh', sandbox: 'workspace-write' }),
   'luna-xhigh-review': freezePreset({ model: 'gpt-6-luna', effort: 'xhigh', sandbox: 'read-only' }),
   'sol-low-smoke': freezePreset({ model: 'gpt-6.1-sol', effort: 'low', sandbox: 'workspace-write' }),

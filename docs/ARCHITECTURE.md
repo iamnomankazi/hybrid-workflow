@@ -9,7 +9,7 @@ fix deliberately, never silently.
 | --- | --- | --- |
 | Human | Final authority; merges to main; pushes | — |
 | Opus (native Claude Code session) | Plans, decomposes, writes capsules, submits jobs, reviews results, integrates patches, decides | Launch Codex directly; edit runner-owned files |
-| Claude-side Sonnet subagents | Short bounded Claude work chosen by Opus, inside the Opus session | Get managed by the runner |
+| Claude subagents (at most 2 Haiku 5.5 + 2 Sonnet 5.5) | Short bounded Claude work chosen by Opus via the Agent tool, inside the Opus session; read-only or in their own worktree | Get managed by the runner; write to the integration worktree |
 | `hybrid` CLI | Deterministic control surface Opus calls; writes control files; launches the runner | Reasoning; merging |
 | Runner (one per run, temporary) | Codex lifecycle: queue, worktrees, launch, monitor, cancel, capture, record | LLM calls; interpret `plan.md`; merge; commit; push; auto-relaunch uncertain work |
 | Job host (one per attempt) | Owns exactly one `codex.exe` process and records its identity and exit | Anything else |

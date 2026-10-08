@@ -166,8 +166,8 @@ describe('constants: misc contracts', () => {
     assert.ok(Object.isFrozen(DECISIONS));
   });
 
-  test('V1_MAX_CONCURRENCY is 4', () => {
-    assert.equal(V1_MAX_CONCURRENCY, 4);
+  test('V1_MAX_CONCURRENCY is 8', () => {
+    assert.equal(V1_MAX_CONCURRENCY, 8);
   });
 });
 

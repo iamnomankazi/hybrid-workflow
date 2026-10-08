@@ -12,7 +12,8 @@ const impl = (extra = {}) => ({ preset: 'sol-high-impl', capsule: 'x', write_sco
 test('builtin presets are frozen and resolve unchanged', () => {
   assert.ok(Object.isFrozen(BUILTIN_PRESETS));
   assert.deepEqual(presets['luna-xhigh-review'], { model: 'gpt-6-luna', effort: 'xhigh', sandbox: 'read-only' });
-  assert.equal(Object.keys(presets).length, 5);
+  assert.deepEqual(presets['sol-xhigh-impl'], { model: 'gpt-6.1-sol', effort: 'xhigh', sandbox: 'workspace-write' });
+  assert.equal(Object.keys(presets).length, 6);
 });
 
 test('resolvePresets lets machine presets add and override builtins', () => {

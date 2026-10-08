@@ -22,7 +22,7 @@ export const SCHEMAS = Object.freeze({
 });
 
 // v1 never runs more than this many Codex workers at once, whatever the config says.
-export const V1_MAX_CONCURRENCY = 4;
+export const V1_MAX_CONCURRENCY = 8;
 
 export const STATES = Object.freeze({
   queued: 'queued',

@@ -129,22 +129,25 @@ const fakeResolvers = {
 };
 
 test('buildRunConfig pins settings and clamps concurrency to the v1 maximum', () => {
-  const machine = { ...loadMachineConfigDefaults(), max_concurrency: 8, extra_path: ['C:\\tools'] };
+  const machine = { ...loadMachineConfigDefaults(), max_concurrency: 12, extra_path: ['C:\\tools'] };
   const rc = buildRunConfig(machine, {}, fakeResolvers);
-  assert.equal(rc.max_concurrency, 4);
+  assert.equal(rc.max_concurrency, 8);
   assert.equal(rc.codex_exe, 'C:\\fake\\codex.exe');
   assert.equal(rc.worktree_root, path.resolve('C:\\hw\\wt'));
   assert.equal(rc.playwright_dir, path.resolve('C:\\hw\\ms-playwright'));
   assert.equal(rc.npm_cache_dir, path.resolve('C:\\hw\\npm-cache'));
   assert.equal(rc.codex_home, null);
   assert.deepEqual(rc.extra_path, ['C:\\tools']);
-  assert.equal(Object.keys(rc.presets).length, 5);
+  assert.equal(Object.keys(rc.presets).length, 6);
   assert.equal(rc.windows_sandbox, 'elevated');
   assert.equal('repos' in rc, false);
   assert.notEqual(rc.extra_path, machine.extra_path);
 
   assert.equal(buildRunConfig(machine, { concurrency: 2 }, fakeResolvers).max_concurrency, 2);
-  assert.equal(buildRunConfig(machine, { concurrency: 9 }, fakeResolvers).max_concurrency, 4);
+  assert.equal(buildRunConfig(machine, { concurrency: 8 }, fakeResolvers).max_concurrency, 8);
+  assert.equal(buildRunConfig(machine, { concurrency: 9 }, fakeResolvers).max_concurrency, 8);
+  // The machine default stays 4; 8 is a per-run choice (run start --concurrency 8).
+  assert.equal(buildRunConfig(loadMachineConfigDefaults(), {}, fakeResolvers).max_concurrency, 4);
   assert.equal(buildRunConfig(machine, { concurrency: 0 }, fakeResolvers).max_concurrency, 1);
   assert.throws(() => buildRunConfig(machine, { concurrency: 1.5 }, fakeResolvers), /integer/);
 });
