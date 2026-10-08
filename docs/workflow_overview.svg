@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="724" viewBox="0 0 1200 724" role="img" aria-labelledby="diagram-title diagram-desc">
+  <title id="diagram-title">Hybrid Workflow architecture</title>
+  <desc id="diagram-desc">Four-stage workflow: Plan with Claude Code Opus, Dispatch with Hybrid CLI and runner, Execute with parallel Codex Sol and Luna workers, and Integrate validated changes with human approval. The controller reviews results, integrates them and plans the next jobs. A temporary Sol XHigh controller may take over the same run when Claude usage is low.</desc>
+  <defs>
+    <marker id="forward-arrow" markerWidth="9" markerHeight="9" refX="6.5" refY="4.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M1 1 L6.5 4.5 L1 8" fill="none" stroke="#62778a" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="return-arrow" markerWidth="9" markerHeight="9" refX="6.5" refY="4.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M1 1 L6.5 4.5 L1 8" fill="none" stroke="#71899b" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+  <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Segoe UI Symbol', Helvetica, Arial, 'DejaVu Sans', sans-serif">
+    <!-- Fixed surface supports legibility in GitHub's light and dark themes. -->
+    <rect x="1" y="1" width="1198" height="722" rx="19" fill="#fbfcfe" stroke="#e0e5ea" stroke-width="1.5"/>
+    <text x="170" y="81" font-size="33" font-weight="700" fill="#1e2b38" letter-spacing="-0.65">Hybrid Workflow</text>
+
+    <g transform="translate(0 -30)">
+    <!-- The single result loop stays entirely outside the stage panels. -->
+    <path d="M170 647 H119 Q107 647 107 635 V230 Q107 218 119 218 H162" fill="none" stroke="#8195a5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#return-arrow)"/>
+    <text x="93" y="432" transform="rotate(-90 93 432)" text-anchor="middle" font-size="15" font-weight="500" fill="#667d90">next jobs</text>
+
+    <!-- Stage 1: Plan. -->
+    <rect x="170" y="162" width="942" height="130" rx="10" fill="#ffffff" stroke="#dce3ea" stroke-width="1.5"/>
+    <rect x="170" y="174" width="4" height="106" rx="2" fill="#55758d"/>
+    <text x="204" y="234" font-size="17" font-weight="700" letter-spacing="1.5" fill="#506d83">PLAN</text>
+    <path d="M326 180 V274" stroke="#e2e7ec" stroke-width="1.5"/>
+    <text x="353" y="209" font-size="22" font-weight="650" fill="#1c2c3a">Controller: Opus (Claude Code)</text>
+    <text x="353" y="240" font-size="16.5" fill="#536474">Plans and splits work into jobs</text>
+    <text x="353" y="269" font-size="14.5" fill="#6a7885">Optional: Haiku / Sonnet subagents</text>
+
+    <!-- Low-prominence handoff is attached only to the controller stage. -->
+    <path d="M799 182 V274" fill="none" stroke="#c6d2dc" stroke-width="1.5" stroke-dasharray="3 5"/>
+    <text x="824" y="202" font-size="14.5" font-weight="600" fill="#536a7a">When Claude usage is low:</text>
+    <text x="824" y="224" font-size="14.5" fill="#617585">temporary Sol XHigh controller</text>
+    <text x="824" y="245" font-size="14.5" fill="#617585">takes over the same run</text>
+    <text x="824" y="266" font-size="14.5" fill="#617585">(epoch-fenced), then hands back</text>
+
+    <!-- The dominant forward route is one unobstructed vertical spine. -->
+    <path d="M641 294 V319" stroke="#62778a" stroke-width="2" fill="none" stroke-linecap="round" marker-end="url(#forward-arrow)"/>
+
+    <!-- Stage 2: Dispatch. -->
+    <rect x="170" y="327" width="942" height="100" rx="10" fill="#ffffff" stroke="#dce3ea" stroke-width="1.5"/>
+    <rect x="170" y="339" width="4" height="76" rx="2" fill="#55758d"/>
+    <text x="204" y="386" font-size="17" font-weight="700" letter-spacing="1.45" fill="#506d83">DISPATCH</text>
+    <path d="M326 345 V409" stroke="#e2e7ec" stroke-width="1.5"/>
+    <text x="353" y="371" font-size="22" font-weight="650" fill="#1c2c3a">Hybrid CLI + runner</text>
+    <text x="353" y="402" font-size="16.5" fill="#536474">Durable run state on disk · deterministic, no AI</text>
+
+    <path d="M641 429 V454" stroke="#62778a" stroke-width="2" fill="none" stroke-linecap="round" marker-end="url(#forward-arrow)"/>
+
+    <!-- Stage 3: Execute. No per-worker cards or separate model lanes. -->
+    <rect x="170" y="462" width="942" height="100" rx="10" fill="#ffffff" stroke="#cbded7" stroke-width="1.5"/>
+    <rect x="170" y="474" width="4" height="76" rx="2" fill="#37846e"/>
+    <text x="204" y="521" font-size="17" font-weight="700" letter-spacing="1.5" fill="#317a67">EXECUTE</text>
+    <path d="M326 480 V544" stroke="#e2e7ec" stroke-width="1.5"/>
+    <text x="353" y="506" font-size="22" font-weight="650" fill="#1c2c3a">Codex workers: Sol / Luna</text>
+    <text x="353" y="537" font-size="16.5" fill="#536474">Each in its own Git worktree · 4 by default, up to 8</text>
+
+    <path d="M641 564 V589" stroke="#62778a" stroke-width="2" fill="none" stroke-linecap="round" marker-end="url(#forward-arrow)"/>
+
+    <!-- Stage 4: Integration. -->
+    <rect x="170" y="597" width="942" height="100" rx="10" fill="#ffffff" stroke="#dce3ea" stroke-width="1.5"/>
+    <rect x="170" y="609" width="4" height="76" rx="2" fill="#55758d"/>
+    <text x="204" y="656" font-size="17" font-weight="700" letter-spacing="1.45" fill="#506d83">INTEGRATE</text>
+    <path d="M326 615 V679" stroke="#e2e7ec" stroke-width="1.5"/>
+    <text x="353" y="641" font-size="22" font-weight="650" fill="#1c2c3a">Review and integrate</text>
+    <text x="353" y="672" font-size="16.5" fill="#536474">Validated results → integration branch → you merge to main</text>
+    </g>
+  </g>
+</svg>
